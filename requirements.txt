@@ -1,0 +1,25 @@
+# Gerty - local AI voice assistant
+
+# Voice
+pvporcupine>=3.0.0
+vosk>=0.3.45
+piper-tts>=1.2.0
+sounddevice>=0.4.6
+numpy
+
+# LLM
+ollama>=0.1.0
+openai>=1.0.0
+httpx
+
+# Telegram
+python-telegram-bot>=21.0
+
+# UI (qt6 backend works without system GTK packages)
+pywebview[qt6]>=4.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+websockets>=12.0
+
+# Config
+python-dotenv>=1.0.0

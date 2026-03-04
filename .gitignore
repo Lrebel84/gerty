@@ -1,0 +1,11 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+data/
+models/*.tflite
+models/*.onnx
+models/vosk/
+models/piper/
+frontend/node_modules/
