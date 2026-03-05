@@ -19,6 +19,8 @@ OLLAMA_MODEL = _ollama_default
 OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "") or _ollama_default
 OLLAMA_TOOL_MODEL = os.getenv("OLLAMA_TOOL_MODEL", "") or _ollama_default
 OLLAMA_REASONING_MODEL = os.getenv("OLLAMA_REASONING_MODEL", "") or _ollama_default
+# Voice: faster model for low-latency voice replies (e.g. qwen2.5:3b). Empty = use chat model.
+OLLAMA_VOICE_MODEL = os.getenv("OLLAMA_VOICE_MODEL", "") or None
 
 # OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -49,8 +51,18 @@ TELEGRAM_CHAT_IDS = _parse_telegram_chat_ids()
 # Porcupine wake word
 PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
 
+# Speech-to-text backend: vosk, faster_whisper, or groq
+# Use vosk if faster_whisper hangs (e.g. model download on first use)
+STT_BACKEND = os.getenv("STT_BACKEND", "vosk")
+FASTER_WHISPER_MODEL = os.getenv("FASTER_WHISPER_MODEL", "base")
+FASTER_WHISPER_DEVICE = os.getenv("FASTER_WHISPER_DEVICE", "cpu")  # cpu or cuda
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# VAD (Silero) / energy fallback: min silence before end-of-speech (ms)
+VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "2000"))
+
 # Model paths (resolved from project root)
-_vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.22")
+_vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.15")
 _piper_path = os.getenv("PIPER_VOICE_PATH", "models/piper/en_US-amy-medium")
 VOSK_MODEL_PATH = PROJECT_ROOT / _vosk_path if not Path(_vosk_path).is_absolute() else Path(_vosk_path)
 PIPER_VOICE_PATH = PROJECT_ROOT / _piper_path if not Path(_piper_path).is_absolute() else Path(_piper_path)
@@ -77,6 +89,7 @@ ALARM_POLL_INTERVAL = int(os.getenv("ALARM_POLL_INTERVAL", "5"))
 
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))
+VOICE_RESPONSE_TIMEOUT = float(os.getenv("VOICE_RESPONSE_TIMEOUT", "30"))
 HTTP_TIMEOUT_OPENROUTER = float(os.getenv("HTTP_TIMEOUT_OPENROUTER", "15"))
 OLLAMA_CHAT_TIMEOUT = float(os.getenv("OLLAMA_CHAT_TIMEOUT", "180"))
 OLLAMA_HEALTH_TIMEOUT = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "2"))

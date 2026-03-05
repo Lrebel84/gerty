@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import type { Message } from '../App'
 import { MarkdownMessage } from './MarkdownMessage'
 
+const API_BASE = '/api'
+
 interface ChatWindowProps {
   messages: Message[]
   onSend: (content: string, provider?: string) => void
@@ -13,9 +15,39 @@ interface ChatWindowProps {
   onVoiceStatusChange?: (status: 'idle' | 'listening' | 'processing') => void
 }
 
-export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatus, provider, onProviderChange }: ChatWindowProps) {
+async function startVoiceRecording(): Promise<void> {
+  // Always use HTTP - bridge can fail to invoke in PyWebView; HTTP is reliable
+  await fetch(`${API_BASE}/voice/start`, { method: 'POST' })
+}
+
+async function stopVoiceRecording(): Promise<void> {
+  await fetch(`${API_BASE}/voice/stop`, { method: 'POST' })
+}
+
+function hasVoiceAPI(): boolean {
+  return true
+}
+
+const MIC_DEBOUNCE_MS = 400
+
+export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatus, provider, onProviderChange, onVoiceStatusChange }: ChatWindowProps) {
   const [input, setInput] = useState('')
+  const [isRecording, setIsRecording] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const micClickBlockedRef = useRef(false)
+  const recordingStartedAtRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (voiceStatus === 'idle' || voiceStatus === 'processing') {
+      // Ignore 'idle' within 600ms of starting - backend may send stale/erroneous idle
+      if (voiceStatus === 'idle' && recordingStartedAtRef.current) {
+        const elapsed = Date.now() - recordingStartedAtRef.current
+        if (elapsed < 600) return
+      }
+      recordingStartedAtRef.current = null
+      setIsRecording(false)
+    }
+  }, [voiceStatus])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -27,6 +59,23 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
     if (text) {
       onSend(text, provider)
       setInput('')
+    }
+  }
+
+  const handleMicClick = async () => {
+    if (micClickBlockedRef.current) return
+    micClickBlockedRef.current = true
+    setTimeout(() => { micClickBlockedRef.current = false }, MIC_DEBOUNCE_MS)
+
+    if (isRecording) {
+      await stopVoiceRecording()
+      setIsRecording(false)
+      onVoiceStatusChange?.('processing')
+    } else {
+      recordingStartedAtRef.current = Date.now()
+      await startVoiceRecording()
+      setIsRecording(true)
+      onVoiceStatusChange?.('listening')
     }
   }
 
@@ -72,7 +121,7 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
             </span>
           )}
           <span
-            className={`text-sm px-2 py-1 rounded ${
+            className={`text-sm px-2 py-1 rounded flex items-center gap-2 ${
               voiceStatus === 'listening'
                 ? 'bg-emerald-500/20 text-emerald-400 animate-pulse'
                 : voiceStatus === 'processing'
@@ -81,6 +130,15 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
             }`}
           >
             {voiceStatus === 'listening' ? 'Listening...' : voiceStatus === 'processing' ? 'Processing...' : 'Ready'}
+            {voiceStatus === 'processing' && onVoiceStatusChange && (
+              <button
+                type="button"
+                onClick={() => onVoiceStatusChange('idle')}
+                className="text-xs underline hover:no-underline ml-1"
+              >
+                Cancel
+              </button>
+            )}
           </span>
         </div>
       </header>
@@ -88,7 +146,11 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
       <div className="flex-1 overflow-y-auto p-6 space-y-4 select-text">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-[var(--text-secondary)]">
-            <p className="text-lg mb-2">Say "computer" to wake me, or type below.</p>
+            <p className="text-lg mb-2">
+              {hasVoiceAPI()
+                ? "Click the mic to speak—I'll detect when you stop, or click again to stop early. Or type below."
+                : 'Type a message below.'}
+            </p>
             <p className="text-sm">I can tell you the time, set alarms and timers, and answer questions.</p>
           </div>
         )}
@@ -129,6 +191,30 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
             placeholder="Type a message..."
             className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
+          {hasVoiceAPI() && (
+            <button
+              type="button"
+              onClick={handleMicClick}
+              disabled={voiceStatus === 'processing'}
+              className={`p-3 rounded-xl transition-colors relative overflow-visible disabled:opacity-70 disabled:cursor-not-allowed ${
+                voiceStatus === 'listening' || isRecording
+                  ? 'bg-emerald-500 text-white ring-2 ring-emerald-400 ring-offset-2 ring-offset-[var(--bg-secondary)]'
+                  : voiceStatus === 'processing'
+                  ? 'bg-amber-500/30 text-amber-400'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] hover:bg-[var(--border)] hover:text-[var(--text-primary)]'
+              }`}
+              title={isRecording ? 'Click to stop early' : 'Click to speak'}
+              aria-label={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              {(voiceStatus === 'listening' || isRecording) && (
+                <span className="absolute inset-0 rounded-xl bg-emerald-400 animate-ping opacity-50" aria-hidden />
+              )}
+              <svg className="w-5 h-5 relative z-10" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            </button>
+          )}
           <button
             type="submit"
             className="px-5 py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-xl text-sm font-medium transition-colors"

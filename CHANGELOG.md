@@ -218,7 +218,78 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 
 ---
 
+## [0.7.0] - 2025-03-05
+
+### Real-time Voice Overhaul
+
+#### STT (Speech-to-Text)
+- **faster-whisper** – Replaces Vosk as default; 4x faster, CTranslate2 backend. Models: tiny, base, small, medium, large-v3 (download on first use)
+- **Groq Whisper** – Optional cloud backend (216x real-time); set `STT_BACKEND=groq` and `GROQ_API_KEY`
+- **Vosk** – Still available as fallback (legacy)
+- **Settings** – STT backend and faster-whisper model selectable in Settings → Voice – Speech recognition (STT)
+
+#### VAD (Voice Activity Detection)
+- **Silero VAD** – Replaces energy-based silence detection; accurate end-of-speech detection
+- **Single-click flow** – Click mic once; auto-stops when you finish speaking (or click again to stop early)
+- **Config** – `VAD_MIN_SILENCE_MS` (default 700ms) for tuning
+
+#### Latency Improvements
+- **Voice skips RAG** – Voice queries bypass RAG retrieval and history summarization for faster replies
+- **OLLAMA_VOICE_MODEL** – Optional faster model for voice (e.g. `qwen2.5:3b`); unset = use chat model
+- **VOICE_RESPONSE_TIMEOUT** – Reduced from 60s to 30s
+
+#### Dependencies
+- **silero-vad** – Voice activity detection
+- **faster-whisper** – Local STT (replaces Vosk as default)
+
+#### Download Script
+- **faster-whisper** – Script pre-downloads base model; others (tiny, small, medium, large-v3) download on first use
+
+#### Config & Docs
+- **.env.example** – `STT_BACKEND`, `FASTER_WHISPER_MODEL`, `FASTER_WHISPER_DEVICE`, `GROQ_API_KEY`, `VAD_MIN_SILENCE_MS`, `OLLAMA_VOICE_MODEL`
+
+---
+
+## [0.7.1] - 2025-03-05
+
+### Revert: Streaming Attempt & Voice Regression
+
+#### What Was Done
+- Attempted to add streaming for faster perceived response time (display tokens as they arrive instead of waiting for full response).
+- Changes made: SSE format for stream, `skip_summarization` for HTTP chat, no-buffer headers, frontend SSE parsing.
+- After issues, reverted to plain-text streaming; then fully reverted `gerty/pipeline.py`, `gerty/ui/server.py`, and `frontend/src/App.tsx` to last committed state.
+- Restored voice loop to start without requiring `PICOVOICE_ACCESS_KEY` (push-to-talk).
+- Added minimal sidebar width/resize props to `App.tsx` to match current `Sidebar` component.
+
+#### Known Regression
+- **Voice chat was working absolutely fine** (with only a slight delay waiting for the full response block) until streaming changes were attempted.
+- **Voice has not worked since** and still is not working: it gets stuck on "Processing" with no response.
+- Text chat works; the regression is specific to voice.
+
+---
+
+## [0.7.2] - 2025-03-05
+
+### Voice Chat Fixes
+
+#### Bug Fixes
+- **VAD init**: Set `vad = None` when Silero VAD fails to load; previously `on_wake()` called `vad.reset()` and re-raised `ImportError`, crashing the recording loop.
+- **Stop signal**: Added HTTP endpoints `POST /api/voice/start` and `POST /api/voice/stop`; frontend now uses HTTP instead of PyWebView bridge (bridge can fail to invoke in some contexts).
+- **Mic blocking**: Added 50ms timeout on `capture.read()` so the loop can check stop request when sounddevice blocks (e.g. under PyWebView/Qt).
+- **Auto-stop timing**: Increased `VAD_MIN_SILENCE_MS` default from 700ms to 2000ms; energy fallback now derives threshold from this (avoids stopping on brief pauses).
+- **STT backend**: Voice loop always uses Vosk; added fallback logic in `_create_stt_backend` when preferred backend fails.
+
+#### Changed
+- **Config**: `VAD_MIN_SILENCE_MS` default is now 2000.
+- **Energy fallback**: Uses `VAD_MIN_SILENCE_MS` and frame length for correct silence threshold across PTT and wake-word modes.
+
+#### Note
+- Ensure `VOSK_MODEL_PATH` in `.env` matches the installed model (e.g. `vosk-model-small-en-us-0.15`).
+
+---
+
 ## Known Issues
 
-- **RAG context on every message** – RAG is now skipped for very short messages (< 15 chars). For longer messages, top-5 chunks are injected; similarity search may return marginally relevant chunks. *Planned: add relevance threshold.*
+- **Restart required for STT changes** – Changing STT backend or model in Settings requires restarting the app. (Voice loop uses Vosk regardless of Settings.)
+- **RAG context on every message** – RAG is now skipped for very short messages (< 15 chars). For longer messages, top-5 chunks are injected; similarity search may return marginally relevant chunks.
 - **Hallucination on non-RAG topics** – When asked about things not in memory/docs (e.g. movies), the model answers from training and may invent facts (e.g. wrong cast). RAG context is irrelevant in those cases. *Expected LLM behaviour; consider grounding external queries.*

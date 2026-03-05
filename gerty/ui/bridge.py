@@ -2,6 +2,7 @@
 
 from gerty.llm.router import Router
 from gerty.pipeline import chat_pipeline_sync
+from gerty.voice.wake_word import request_ptt_recording, stop_ptt_recording
 
 
 def create_bridge(router: Router):
@@ -24,5 +25,13 @@ def create_bridge(router: Router):
 
         def getHistory(self) -> list[dict]:
             return self._history
+
+        def startVoiceRecording(self) -> None:
+            """Start push-to-talk recording (hold mic button)."""
+            request_ptt_recording()
+
+        def stopVoiceRecording(self) -> None:
+            """Stop push-to-talk recording (release mic button)."""
+            stop_ptt_recording()
 
     return GertyAPI()
