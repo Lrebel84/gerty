@@ -111,3 +111,30 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 #### Changed
 - **Server**: `create_app()` now accepts `Router` instance (not just `route` callback) for streaming support
 - **Chat**: Always uses HTTP streaming endpoint instead of PyWebView bridge for real-time display
+
+## [0.4.0] - 2025-03-05
+
+### RAG Knowledge Base
+
+#### Added
+- **RAG module** (`gerty/rag/`) – Document ingestion and retrieval-augmented generation
+  - **Parsers** (`parsers.py`) – PDF (pypdf), Excel/CSV (openpyxl, csv), DOCX (python-docx), TXT/MD, and extensionless text files
+  - **Chunker** (`chunker.py`) – ~2000 char chunks with 100 char overlap
+  - **Embedder** (`embedder.py`) – Ollama embeddings via `POST /api/embed`; pre-flight check for model availability
+  - **Store** (`store.py`) – ChromaDB persistent vector store, `index_folder()`, `query()`, `is_indexed()`, `get_status()`
+- **Config** – `KNOWLEDGE_DIR`, `RAG_DIR`, `RAG_EMBED_MODEL`, `RAG_CHAT_MODEL`
+- **Settings** – `rag_chat_model`, `rag_embed_model` persisted; RAG chat model dropdown (command-r7b, granite3.2:8b, command-r:35b, "Use chat model"); embedding model dropdown (nomic-embed-text, mxbai-embed-large, bge-m3)
+- **Chat flow** – When RAG is indexed, retrieves top-5 chunks, injects into system prompt; optional dedicated RAG chat model (e.g. command-r7b)
+- **API** – `GET /api/rag/status`, `POST /api/rag/index`, `GET /api/rag/files`
+- **Frontend** – Knowledge base section in Settings: status, "Index now" button, confirmation messages, knowledge folder path, CLI test hint
+- **CLI test** – `python3 -m gerty.rag` runs end-to-end RAG check (Ollama, index, query)
+- **Dependencies** – chromadb, pypdf, openpyxl, python-docx
+
+#### Bug Fixes
+- **ChromaDB metadata** – Sanitize `None` values (ChromaDB rejects them); use `0` for page, `""` for other fields
+- **Extensionless files** – Support plain text files with no extension (e.g. "About me and my family")
+
+#### Data Layout
+- `data/knowledge/` – User drops files here
+- `data/rag/chroma_db/` – ChromaDB persistence
+- `data/rag/index.json` – Index metadata; dirs created on app startup

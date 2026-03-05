@@ -6,7 +6,6 @@ from typing import Callable, Iterator
 from gerty.config import (
     OPENROUTER_API_KEY,
     OLLAMA_CHAT_MODEL,
-    OLLAMA_TOOL_MODEL,
     OLLAMA_REASONING_MODEL,
 )
 from gerty.llm.ollama_client import OllamaClient
@@ -138,6 +137,12 @@ class Router:
         self,
         message: str,
         history: list[dict] | None = None,
+        *,
+        provider: str | None = None,
+        local_model: str | None = None,
+        openrouter_model: str | None = None,
+        custom_prompt: str | None = None,
+        rag_model: str | None = None,
     ) -> Iterator[str]:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
@@ -147,18 +152,16 @@ class Router:
             yield result
             return
 
-        if intent == "complex" and OPENROUTER_API_KEY and self.openrouter.is_available():
-            try:
-                result = self.openrouter.chat(message, history)
-                yield result
-                return
-            except Exception:
-                pass
+        use_local = (provider or "local").lower() == "local"
+        local_m = rag_model or local_model or OLLAMA_CHAT_MODEL
+        openrouter_m = openrouter_model or OLLAMA_REASONING_MODEL
 
-        if self.ollama.is_available():
+        if use_local and self.ollama.is_available():
             try:
-                model = OLLAMA_CHAT_MODEL if intent != "complex" else OLLAMA_REASONING_MODEL
-                for chunk in self.ollama.chat_stream(message, history, model=model):
+                model = rag_model or (local_m if intent != "complex" else (local_model or OLLAMA_REASONING_MODEL))
+                for chunk in self.ollama.chat_stream(
+                    message, history, model=model, system_prompt=custom_prompt
+                ):
                     yield chunk
                 return
             except Exception as e:
@@ -167,8 +170,10 @@ class Router:
 
         if OPENROUTER_API_KEY and self.openrouter.is_available():
             try:
-                result = self.openrouter.chat(message, history)
-                yield result
+                for chunk in self.openrouter.chat_stream(
+                    message, history, model=openrouter_m, system_prompt=custom_prompt
+                ):
+                    yield chunk
                 return
             except Exception as e:
                 yield f"OpenRouter error: {e}"

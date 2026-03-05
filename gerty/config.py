@@ -45,3 +45,9 @@ PIPER_VOICE_PATH = PROJECT_ROOT / _piper_path if not Path(_piper_path).is_absolu
 # Data directory for alarms etc.
 DATA_DIR = PROJECT_ROOT / "data"
 ALARMS_FILE = DATA_DIR / "alarms.json"
+
+# RAG knowledge base
+KNOWLEDGE_DIR = DATA_DIR / "knowledge"
+RAG_DIR = DATA_DIR / "rag"
+RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "nomic-embed-text")
+RAG_CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "command-r7b")

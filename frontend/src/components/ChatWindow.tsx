@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Message } from '../App'
+import { MarkdownMessage } from './MarkdownMessage'
 
 interface ChatWindowProps {
   messages: Message[]
-  onSend: (content: string) => void
+  onSend: (content: string, provider?: string) => void
   voiceStatus: 'idle' | 'listening' | 'processing'
+  provider: 'local' | 'openrouter'
+  onProviderChange: (provider: 'local' | 'openrouter') => void
   onVoiceStatusChange?: (status: 'idle' | 'listening' | 'processing') => void
 }
 
-export function ChatWindow({ messages, onSend, voiceStatus }: ChatWindowProps) {
+export function ChatWindow({ messages, onSend, voiceStatus, provider, onProviderChange }: ChatWindowProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -20,7 +23,7 @@ export function ChatWindow({ messages, onSend, voiceStatus }: ChatWindowProps) {
     e.preventDefault()
     const text = input.trim()
     if (text) {
-      onSend(text)
+      onSend(text, provider)
       setInput('')
     }
   }
@@ -28,8 +31,30 @@ export function ChatWindow({ messages, onSend, voiceStatus }: ChatWindowProps) {
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] bg-[var(--bg-secondary)]">
-        <h1 className="text-xl font-semibold tracking-tight">Gerty</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center">
+          <img src="/gerty.png" alt="Gerty" className="h-9 w-9 object-contain" />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg bg-[var(--bg-tertiary)] p-0.5">
+            <button
+              type="button"
+              onClick={() => onProviderChange('local')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                provider === 'local' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              Local
+            </button>
+            <button
+              type="button"
+              onClick={() => onProviderChange('openrouter')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                provider === 'openrouter' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              OpenRouter
+            </button>
+          </div>
           <span
             className={`text-sm px-2 py-1 rounded ${
               voiceStatus === 'listening'
@@ -57,18 +82,19 @@ export function ChatWindow({ messages, onSend, voiceStatus }: ChatWindowProps) {
             className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2.5 select-text cursor-text ${
+              className={`max-w-[85%] rounded-2xl px-4 py-3 select-text cursor-text ${
                 m.role === 'user'
                   ? 'bg-[var(--accent)] text-white'
                   : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
               }`}
             >
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                {m.content}
-                {m.role === 'assistant' && !m.content && (
-                  <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--accent)] animate-pulse" />
-                )}
-              </p>
+              {m.role === 'user' ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.content}</p>
+              ) : m.content ? (
+                <MarkdownMessage content={m.content} />
+              ) : (
+                <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse" />
+              )}
             </div>
           </div>
         ))}

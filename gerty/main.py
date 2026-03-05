@@ -140,7 +140,8 @@ def main():
         except Exception as e:
             logger.warning("Voice loop failed to start: %s", e)
 
-    webview.start(debug=False, gui="qt")
+    icon_path = str(PROJECT_ROOT / "assets" / "gerty.png")
+    webview.start(debug=False, gui="qt", icon=icon_path)
 
 
 if __name__ == "__main__":

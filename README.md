@@ -9,6 +9,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
 - **Toolkit**: Time, date, alarms, timers
+- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; index and query your documents in chat
 
 ## Setup
 
@@ -61,25 +62,40 @@ OLLAMA_REASONING_MODEL=deepseek-r1:7b  # Specialist: coding, math
 
 Pull the models: `ollama pull gemma3:12b` and `ollama pull deepseek-r1:7b`. Check `ollama list` for available model names.
 
-### 4. Download voice models (optional, for STT/TTS)
+### 4. RAG Knowledge Base (optional)
+
+To use the knowledge base, pull the embedding and RAG chat models:
+
+```bash
+ollama pull nomic-embed-text
+ollama pull command-r7b
+```
+
+Drop PDF, Excel, Word, or text files into `data/knowledge/`, then open Settings → Knowledge base → "Index now". Test from terminal: `python3 -m gerty.rag`.
+
+### 5. Download voice models (optional, for STT/TTS)
 
 ```bash
 ./scripts/download_models.sh
 ```
 
-### 5. Install desktop launcher (Pop!_OS)
+### 6. Install desktop launcher (Pop!_OS / Ubuntu)
 
 ```bash
 ./scripts/install_desktop.sh
 ```
 
+This installs a `.desktop` file so you can:
+- **Launch** Gerty from the app launcher (Super key → search "Gerty")
+- **Pin to dock** – Launch Gerty, then right-click its dock icon → "Pin to dock"
+
 ## Usage
 
 ```bash
-python -m gerty.main
+python -m gerty
 ```
 
-Or launch from your application menu after installing the desktop file.
+Or launch from your application launcher after running `./scripts/install_desktop.sh`.
 
 ## Project structure
 
@@ -89,10 +105,14 @@ gerty/
 │   ├── main.py          # Entry point
 │   ├── config.py        # Environment config
 │   ├── llm/             # Ollama, OpenRouter, router
+│   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── tools/           # Time, alarms, timers
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
+├── data/
+│   ├── knowledge/       # Drop files here for RAG indexing
+│   └── rag/             # ChromaDB + index metadata
 ├── frontend/            # React SPA
 ├── models/              # Vosk, Piper models
 └── scripts/             # Install helpers

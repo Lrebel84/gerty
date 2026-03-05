@@ -28,6 +28,18 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
+  const [provider, setProvider] = useState<'local' | 'openrouter'>('local')
+
+  useEffect(() => {
+    fetch(`${API_BASE}/settings`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.provider === 'openrouter' || d.provider === 'local') {
+          setProvider(d.provider)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const win = window as unknown as {
@@ -52,7 +64,16 @@ function App() {
     }
   }, [])
 
-  const handleSend = async (content: string) => {
+  const handleProviderChange = (p: 'local' | 'openrouter') => {
+    setProvider(p)
+    fetch(`${API_BASE}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: p }),
+    }).catch(() => {})
+  }
+
+  const handleSend = async (content: string, useProvider?: string) => {
     if (!content.trim()) return
 
     const userMsg: Message = {
@@ -79,7 +100,11 @@ function App() {
       const res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, history }),
+        body: JSON.stringify({
+          message: content,
+          history,
+          provider: useProvider ?? provider,
+        }),
       })
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => 'Request failed')
@@ -127,6 +152,8 @@ function App() {
           messages={messages}
           onSend={handleSend}
           voiceStatus={voiceStatus}
+          provider={provider}
+          onProviderChange={handleProviderChange}
           onVoiceStatusChange={setVoiceStatus}
         />
       </main>
