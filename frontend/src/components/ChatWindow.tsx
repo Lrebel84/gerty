@@ -63,7 +63,12 @@ export function ChatWindow({ messages, onSend, voiceStatus }: ChatWindowProps) {
                   : 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
               }`}
             >
-              <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.content}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                {m.content}
+                {m.role === 'assistant' && !m.content && (
+                  <span className="inline-block w-2 h-4 ml-0.5 bg-[var(--accent)] animate-pulse" />
+                )}
+              </p>
             </div>
           </div>
         ))}

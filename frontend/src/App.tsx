@@ -30,20 +30,30 @@ function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
 
   useEffect(() => {
-    (window as unknown as { __gertyAddVoiceExchange?: (user: string, assistant: string) => void }).__gertyAddVoiceExchange = (user: string, assistant: string) => {
+    const win = window as unknown as {
+      __gertyAddVoiceExchange?: (user: string, assistant: string) => void
+      __gertySetVoiceStatus?: (status: string) => void
+    }
+    win.__gertyAddVoiceExchange = (user: string, assistant: string) => {
       setMessages((m) => [
         ...m,
         { id: crypto.randomUUID(), role: 'user', content: user, timestamp: new Date() },
         { id: crypto.randomUUID(), role: 'assistant', content: assistant, timestamp: new Date() },
       ])
     }
+    win.__gertySetVoiceStatus = (status: string) => {
+      if (['idle', 'listening', 'processing'].includes(status)) {
+        setVoiceStatus(status as 'idle' | 'listening' | 'processing')
+      }
+    }
     return () => {
-      delete (window as unknown as { __gertyAddVoiceExchange?: unknown }).__gertyAddVoiceExchange
+      delete win.__gertyAddVoiceExchange
+      delete win.__gertySetVoiceStatus
     }
   }, [])
 
-  const sendMessage = async (content: string): Promise<string> => {
-    if (!content.trim()) return ''
+  const handleSend = async (content: string) => {
+    if (!content.trim()) return
 
     const userMsg: Message = {
       id: crypto.randomUUID(),
@@ -53,33 +63,55 @@ function App() {
     }
     setMessages((m) => [...m, userMsg])
 
+    const assistantId = crypto.randomUUID()
+    const assistantMsg: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+    }
+    setMessages((m) => [...m, assistantMsg])
+
     try {
-      if (window.pywebview?.api?.sendMessage) {
-        const reply = await window.pywebview.api.sendMessage(content)
-        return reply
-      }
-      const res = await fetch(`${API_BASE}/chat`, {
+      const history = messages
+        .slice(-10)
+        .map((m) => ({ role: m.role, content: m.content }))
+      const res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content }),
+        body: JSON.stringify({ message: content, history }),
       })
-      const data = await res.json()
-      return data.reply || data.error || 'No response'
-    } catch (e) {
-      return `Error: ${e instanceof Error ? e.message : 'Unknown error'}`
-    }
-  }
-
-  const handleSend = async (content: string) => {
-    const reply = await sendMessage(content)
-    if (reply) {
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: reply,
-        timestamp: new Date(),
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => 'Request failed')
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === assistantId ? { ...msg, content: text || 'Request failed' } : msg
+          )
+        )
+        return
       }
-      setMessages((m) => [...m, assistantMsg])
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let acc = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        acc += decoder.decode(value, { stream: true })
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === assistantId ? { ...msg, content: acc } : msg
+          )
+        )
+      }
+    } catch (e) {
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === assistantId
+            ? { ...msg, content: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }
+            : msg
+        )
+      )
     }
   }
 

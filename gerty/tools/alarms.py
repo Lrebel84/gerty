@@ -89,16 +89,13 @@ class AlarmsTool(Tool):
             lines = [f"• {a['time']} - {a.get('label', 'Alarm')}" for a in alarms]
             return "Your alarms:\n" + "\n".join(lines)
 
-        # Cancel alarms
+        # Cancel alarms - clear all future alarms
         if "cancel" in lower or "remove" in lower or "delete" in lower or "stop" in lower:
             alarms = _load_alarms()
-            now = datetime.now()
-            before = len(alarms)
-            alarms = [a for a in alarms if datetime.fromisoformat(a["datetime"]) > now]
-            _save_alarms(alarms)
-            removed = before - len(alarms)
-            if removed:
-                return f"Removed {removed} alarm(s)."
+            count = len(alarms)
+            _save_alarms([])
+            if count:
+                return f"Removed {count} alarm(s)."
             return "No alarms to remove."
 
         # Set alarm
@@ -124,6 +121,25 @@ class AlarmsTool(Tool):
             for a in alarms
             if datetime.fromisoformat(a["datetime"]) > now
         ]
+
+
+def cancel_all_alarms() -> int:
+    """Cancel all alarms. Returns count removed."""
+    alarms = _load_alarms()
+    count = len(alarms)
+    _save_alarms([])
+    return count
+
+
+def get_pending_alarms() -> list[dict]:
+    """Return all pending (future) alarms for display."""
+    alarms = _load_alarms()
+    now = datetime.now()
+    return [
+        {**a, "time": datetime.fromisoformat(a["datetime"]).strftime("%I:%M %p")}
+        for a in alarms
+        if datetime.fromisoformat(a["datetime"]) > now
+    ]
 
 
 def get_pending_alarms_for_trigger() -> list[dict]:

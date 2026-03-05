@@ -1,7 +1,7 @@
 """Model router: intent classification, tool dispatch, Ollama/OpenRouter selection."""
 
 import re
-from typing import Callable
+from typing import Callable, Iterator
 
 from gerty.config import (
     OPENROUTER_API_KEY,
@@ -133,3 +133,45 @@ class Router:
             except Exception as e:
                 return f"OpenRouter error: {e}"
         return "No LLM available. Start Ollama with: ollama serve"
+
+    def route_stream(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+    ) -> Iterator[str]:
+        """Route message and stream response chunks. Tools return full text at once."""
+        intent = classify_intent(message)
+
+        if intent in ("time", "date", "alarm", "timer") and self._tool_executor:
+            result = self._tool_executor(intent, message)
+            yield result
+            return
+
+        if intent == "complex" and OPENROUTER_API_KEY and self.openrouter.is_available():
+            try:
+                result = self.openrouter.chat(message, history)
+                yield result
+                return
+            except Exception:
+                pass
+
+        if self.ollama.is_available():
+            try:
+                model = OLLAMA_CHAT_MODEL if intent != "complex" else OLLAMA_REASONING_MODEL
+                for chunk in self.ollama.chat_stream(message, history, model=model):
+                    yield chunk
+                return
+            except Exception as e:
+                yield f"Ollama error: {e}. Is Ollama running? Try: ollama serve"
+                return
+
+        if OPENROUTER_API_KEY and self.openrouter.is_available():
+            try:
+                result = self.openrouter.chat(message, history)
+                yield result
+                return
+            except Exception as e:
+                yield f"OpenRouter error: {e}"
+                return
+
+        yield "No LLM available. Start Ollama with: ollama serve"

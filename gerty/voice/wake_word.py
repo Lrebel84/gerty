@@ -1,7 +1,7 @@
 """Wake word detection using Porcupine."""
 
 import struct
-from typing import Callable
+from typing import Callable, Optional
 
 from gerty.config import PICOVOICE_ACCESS_KEY
 
@@ -11,11 +11,11 @@ class WakeWordDetector:
 
     def __init__(
         self,
-        callback: Callable[[], None],
+        callback: Optional[Callable[[], None]] = None,
         access_key: str = PICOVOICE_ACCESS_KEY,
         keyword: str = "computer",
     ):
-        self.callback = callback
+        self.callback = callback if callback is not None else lambda: None
         self.access_key = access_key
         self.keyword = keyword
         self._porcupine = None

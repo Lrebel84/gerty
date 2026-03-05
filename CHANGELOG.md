@@ -52,6 +52,35 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 - **README.md** – Setup, usage, project structure, and system dependencies
 - **CHANGELOG.md** – This file
 
+## [0.2.0] - 2025-03-05
+
+### Phase 2 Upgrades
+
+#### Bug Fixes
+- **WakeWordDetector**: Made `callback` optional (default no-op) so voice loop no longer crashes
+- **Alarm cancel**: Now clears all alarms instead of only removing expired ones
+- **Voice loop**: Added `logging.warning` when voice fails to start
+
+#### Notifications
+- **Notification service** (`gerty/notifications.py`): TTS, system (`notify-send`), and Telegram
+- **Alarm trigger loop**: Background thread polls for due alarms; notifies via TTS, system, Telegram
+- **Timer callbacks**: Registered in main; timers announce completion via TTS, system, Telegram
+
+#### Backend API
+- `GET /api/alarms` – list pending alarms
+- `POST /api/alarms/cancel` – cancel all alarms
+- `GET /api/timers` – list active timers with remaining time
+- `POST /api/timers/cancel` – cancel all timers
+
+#### Sidebar
+- Alarms section with list and "Cancel all" button
+- Timers section with countdown and "Cancel all" button
+- Polls API every 2 seconds
+
+#### Voice Status
+- Voice loop reports `listening`, `processing`, `idle` to UI
+- Chat header shows real-time voice status
+
 ### Changed (post-0.1.0)
 - **PyWebView**: Force Qt backend (`gui="qt"`) to skip GTK and avoid load failures
 - **Chat UI**: Make message text selectable for copy/paste (`select-text`)
@@ -63,3 +92,22 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 - PyWebView uses Qt6 backend (`pywebview[qt6]`) for Linux; requires `libxcb-cursor0` and `libxcb-xinerama0`
 - Voice features require: PICOVOICE_ACCESS_KEY, Vosk model, Piper voice model
 - Ollama must be running for local LLM; OpenRouter is optional for complex queries
+
+## [0.3.0] - 2025-03-06
+
+### Streaming & Model Updates
+
+#### Streaming
+- **Ollama client**: Added `chat_stream()` for token-by-token streaming from Ollama API
+- **Router**: Added `route_stream()` – streams LLM output; tools return full text at once
+- **API**: New `POST /api/chat/stream` endpoint returns plain-text stream
+- **Frontend**: Chat uses `fetch` + `ReadableStream` to display tokens as they arrive
+- **UI**: Blinking cursor while assistant message is empty during stream
+
+#### Model
+- **Default model**: Switched to `qwen2.5:7b` for AMD Ryzen 9 / Radeon 680M / 27GB RAM (balance of speed and quality)
+- **`.env`**: `OLLAMA_CHAT_MODEL` and `OLLAMA_REASONING_MODEL` now use `qwen2.5:7b`
+
+#### Changed
+- **Server**: `create_app()` now accepts `Router` instance (not just `route` callback) for streaming support
+- **Chat**: Always uses HTTP streaming endpoint instead of PyWebView bridge for real-time display
