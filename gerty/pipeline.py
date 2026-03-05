@@ -3,7 +3,13 @@
 import logging
 from typing import Iterator
 
-from gerty.config import OLLAMA_CHAT_MODEL, RAG_MIN_MSG_LEN, RAG_SUMMARIZE_THRESHOLD, RAG_TOP_K
+from gerty.config import (
+    OLLAMA_CHAT_MODEL,
+    OLLAMA_VOICE_MODEL,
+    RAG_MIN_MSG_LEN,
+    RAG_SUMMARIZE_THRESHOLD,
+    RAG_TOP_K,
+)
 from gerty.rag import is_indexed as rag_is_indexed, query as rag_query
 from gerty.settings import load as load_settings
 
@@ -46,6 +52,7 @@ def chat_pipeline_stream(
     local_model: str | None = None,
     openrouter_model: str | None = None,
     custom_prompt: str | None = None,
+    source: str | None = None,
 ) -> Iterator[str]:
     """
     Full chat pipeline: RAG context, summarization, custom prompt, then route.
@@ -54,6 +61,9 @@ def chat_pipeline_stream(
     settings = load_settings()
     provider = provider or settings.get("provider", "local")
     local_model = local_model or settings.get("local_model")
+    if source == "voice" and OLLAMA_VOICE_MODEL:
+        local_model = OLLAMA_VOICE_MODEL
+        logger.info("Voice: using OLLAMA_VOICE_MODEL=%s", OLLAMA_VOICE_MODEL)
     openrouter_model = openrouter_model or settings.get("openrouter_model")
     custom_prompt = (
         (custom_prompt or settings.get("custom_prompt") or "").strip()
@@ -68,7 +78,8 @@ def chat_pipeline_stream(
     use_rag_model = rag_chat_model and rag_chat_model != "__use_chat__"
 
     chunks: list[tuple[str, dict]] = []
-    if rag_is_indexed() and len(message.strip()) >= RAG_MIN_MSG_LEN:
+    rag_enabled = settings.get("rag_enabled", False)
+    if rag_enabled and rag_is_indexed() and len(message.strip()) >= RAG_MIN_MSG_LEN:
         chunks = rag_query(message, top_k=RAG_TOP_K, embed_model=rag_embed_model)
     if chunks:
         context = "\n\n".join(c[0] for c in chunks)
@@ -121,10 +132,13 @@ def chat_pipeline_sync(
     history: list[dict] | None = None,
     *,
     provider: str | None = None,
+    source: str | None = None,
 ) -> str:
     """
     Synchronous chat pipeline. Collects streamed response. Used by voice and Telegram.
     """
     return "".join(
-        chat_pipeline_stream(router, message, history, provider=provider)
+        chat_pipeline_stream(
+            router, message, history, provider=provider, source=source
+        )
     )

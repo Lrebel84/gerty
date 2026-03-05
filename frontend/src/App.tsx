@@ -4,6 +4,10 @@ import { Sidebar } from './components/Sidebar'
 
 const API_BASE = '/api'
 
+const SIDEBAR_MIN = 220
+const SIDEBAR_MAX = 480
+const SIDEBAR_DEFAULT = 300
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -28,6 +32,13 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const messagesRef = useRef<Message[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const w = parseInt(localStorage.getItem('gerty_sidebar_width') || '', 10)
+      if (w >= SIDEBAR_MIN && w <= SIDEBAR_MAX) return w
+    } catch {}
+    return SIDEBAR_DEFAULT
+  })
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
   const [provider, setProvider] = useState<'local' | 'openrouter'>('local')
   const [localModel, setLocalModel] = useState('')
@@ -223,15 +234,28 @@ function App() {
     }
   }
 
+  const handleSidebarResize = (w: number) => {
+    const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w))
+    setSidebarWidth(clamped)
+    try {
+      localStorage.setItem('gerty_sidebar_width', String(clamped))
+    } catch {}
+  }
+
   return (
     <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <Sidebar
         open={sidebarOpen}
+        width={sidebarWidth}
+        onResize={handleSidebarResize}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         voiceStatus={voiceStatus}
         onSettingsSave={refetchSettings}
       />
-      <main className={`flex-1 flex flex-col transition-all ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
+      <main
+        className="flex-1 flex flex-col transition-[margin] duration-200"
+        style={{ marginLeft: sidebarOpen ? sidebarWidth : 0 }}
+      >
         <ChatWindow
           messages={messages}
           onSend={handleSend}

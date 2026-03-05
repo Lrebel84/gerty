@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Settings } from './Settings'
 
 const API_BASE = '/api'
@@ -17,6 +17,8 @@ interface Timer {
 
 interface SidebarProps {
   open: boolean
+  width: number
+  onResize: (width: number) => void
   onToggle: () => void
   voiceStatus?: 'idle' | 'listening' | 'processing'
   onSettingsSave?: () => void
@@ -29,10 +31,38 @@ function formatRemaining(sec: number): string {
   return `${s}s`
 }
 
-export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
+export function Sidebar({ open, width, onResize, onToggle, onSettingsSave }: SidebarProps) {
   const [alarms, setAlarms] = useState<Alarm[]>([])
   const [timers, setTimers] = useState<Timer[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [resizing, setResizing] = useState(false)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      setResizing(true)
+      startXRef.current = e.clientX
+      startWidthRef.current = width
+    },
+    [width]
+  )
+
+  useEffect(() => {
+    if (!resizing) return
+    const onMove = (e: MouseEvent) => {
+      const delta = e.clientX - startXRef.current
+      onResize(startWidthRef.current + delta)
+    }
+    const onEnd = () => setResizing(false)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onEnd)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onEnd)
+    }
+  }, [resizing, onResize])
 
   useEffect(() => {
     const fetchTools = async () => {
@@ -79,11 +109,12 @@ export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed left-0 top-0 h-full w-64 bg-[var(--bg-secondary)] border-r border-[var(--border)] z-10 transition-transform ${
+      className={`fixed left-0 top-0 h-full bg-[var(--bg-secondary)] border-r border-[var(--border)] z-10 transition-transform overflow-hidden flex flex-col ${
         open ? 'translate-x-0' : '-translate-x-full'
       }`}
+      style={{ width: open ? width : 0 }}
     >
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-4 flex items-center justify-between shrink-0">
         <h2 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
           Tools
         </h2>
@@ -102,7 +133,7 @@ export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
           </svg>
         </button>
       </div>
-      <nav className="p-2 space-y-4">
+      <nav className="p-2 space-y-4 overflow-y-auto overflow-x-hidden min-w-0 flex-1">
         <section>
           <h3 className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider px-3 py-2">
             Alarms
@@ -112,8 +143,8 @@ export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
           ) : (
             <ul className="space-y-1">
               {alarms.map((a, i) => (
-                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center bg-[var(--bg-tertiary)] rounded-lg">
-                  <span>{a.time} {a.label && `- ${a.label}`}</span>
+                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg min-w-0">
+                  <span className="truncate">{a.time} {a.label && `- ${a.label}`}</span>
                 </li>
               ))}
               <li>
@@ -136,9 +167,9 @@ export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
           ) : (
             <ul className="space-y-1">
               {timers.map((t, i) => (
-                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center bg-[var(--bg-tertiary)] rounded-lg">
-                  <span>{t.label}</span>
-                  <span className="text-[var(--text-secondary)]">{formatRemaining(t.remaining_sec)}</span>
+                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg min-w-0">
+                  <span className="truncate">{t.label}</span>
+                  <span className="text-[var(--text-secondary)] shrink-0">{formatRemaining(t.remaining_sec)}</span>
                 </li>
               ))}
               <li>
@@ -165,6 +196,15 @@ export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
           </button>
         </section>
       </nav>
+      {open && (
+        <div
+          onMouseDown={handleResizeStart}
+          className={`absolute right-0 top-0 w-3 h-full cursor-col-resize hover:bg-[var(--accent)]/30 transition-colors ${
+            resizing ? 'bg-[var(--accent)]/50' : ''
+          }`}
+          aria-label="Resize sidebar"
+        />
+      )}
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} onSave={onSettingsSave} />
     </aside>
   )

@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
+# Logging: WARNING default, INFO for debugging (e.g. GERTY_LOG_LEVEL=INFO)
+LOG_LEVEL = os.getenv("GERTY_LOG_LEVEL", "WARNING").upper()
+
 # Ollama
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 _ollama_default = os.getenv("OLLAMA_MODEL", "llama3.2")
@@ -51,15 +54,15 @@ TELEGRAM_CHAT_IDS = _parse_telegram_chat_ids()
 # Porcupine wake word
 PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
 
-# Speech-to-text backend: vosk, faster_whisper, or groq
-# Use vosk if faster_whisper hangs (e.g. model download on first use)
-STT_BACKEND = os.getenv("STT_BACKEND", "vosk")
+# Speech-to-text backend: faster_whisper, vosk, groq, or auto (Groq when WiFi, else local)
+STT_BACKEND = os.getenv("STT_BACKEND", "faster_whisper")
 FASTER_WHISPER_MODEL = os.getenv("FASTER_WHISPER_MODEL", "base")
 FASTER_WHISPER_DEVICE = os.getenv("FASTER_WHISPER_DEVICE", "cpu")  # cpu or cuda
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # VAD (Silero) / energy fallback: min silence before end-of-speech (ms)
-VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "2000"))
+# 700=fastest, 1200=balanced, 2000=noisy environments
+VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "700"))
 
 # Model paths (resolved from project root)
 _vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.15")

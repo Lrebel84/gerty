@@ -13,9 +13,13 @@ interface SettingsData {
   openrouter_model: string
   custom_prompt: string
   provider: string
+  rag_enabled: boolean
   rag_chat_model: string
   rag_embed_model: string
   memory_enabled: boolean
+  piper_voice: string
+  stt_backend: string
+  faster_whisper_model: string
 }
 
 interface RAGStatus {
@@ -26,8 +30,23 @@ interface RAGStatus {
   memory_count?: number
 }
 
-const RAG_CHAT_MODELS = ['command-r7b', 'granite3.2:8b', 'command-r:35b']
+const RAG_CHAT_MODELS = ['llama3.1:8b', 'command-r7b', 'granite3.2:8b', 'command-r:35b']
 const RAG_EMBED_MODELS = ['nomic-embed-text', 'mxbai-embed-large', 'bge-m3']
+
+const STT_BACKENDS = [
+  { value: 'auto', label: 'Auto (Groq when WiFi, else local)' },
+  { value: 'faster_whisper', label: 'faster-whisper (local)' },
+  { value: 'vosk', label: 'Vosk (local, legacy)' },
+  { value: 'groq', label: 'Groq (cloud, 216x real-time)' },
+] as const
+
+const FASTER_WHISPER_MODELS = [
+  { value: 'tiny', label: 'tiny', desc: 'Fastest, ~39M params' },
+  { value: 'base', label: 'base', desc: 'Good balance, ~74M params' },
+  { value: 'small', label: 'small', desc: 'Better accuracy, ~244M params' },
+  { value: 'medium', label: 'medium', desc: 'High accuracy, ~769M params' },
+  { value: 'large-v3', label: 'large-v3', desc: 'Best accuracy, ~1.5B params' },
+] as const
 
 export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [localModel, setLocalModel] = useState('')
@@ -35,12 +54,18 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [customPrompt, setCustomPrompt] = useState('')
   const [ollamaModels, setOllamaModels] = useState<string[]>([])
   const [openrouterModels, setOpenrouterModels] = useState<string[]>([])
+  const [ragEnabled, setRagEnabled] = useState(true)
   const [ragChatModel, setRagChatModel] = useState('__use_chat__')
   const [ragEmbedModel, setRagEmbedModel] = useState('nomic-embed-text')
   const [ragStatus, setRagStatus] = useState<RAGStatus | null>(null)
   const [ragIndexing, setRagIndexing] = useState(false)
   const [ragIndexMessage, setRagIndexMessage] = useState<string | null>(null)
   const [memoryEnabled, setMemoryEnabled] = useState(true)
+  const [piperVoice, setPiperVoice] = useState('')
+  const [piperVoices, setPiperVoices] = useState<string[]>([])
+  const [sttBackend, setSttBackend] = useState('faster_whisper')
+  const [fasterWhisperModel, setFasterWhisperModel] = useState('base')
+  const [playingSample, setPlayingSample] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -52,11 +77,19 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           setLocalModel(d.local_model || '')
           setOpenrouterModel(d.openrouter_model || '')
           setCustomPrompt(d.custom_prompt || '')
+          setRagEnabled(d.rag_enabled === true)
           setRagChatModel(d.rag_chat_model || '__use_chat__')
           setRagEmbedModel(d.rag_embed_model || 'nomic-embed-text')
           setMemoryEnabled(d.memory_enabled !== false)
+          setPiperVoice(d.piper_voice || '')
+          setSttBackend(d.stt_backend || 'faster_whisper')
+          setFasterWhisperModel(d.faster_whisper_model || 'base')
         })
         .catch(() => {})
+      fetch(`${API_BASE}/voice/list`)
+        .then((r) => r.json())
+        .then((d) => setPiperVoices(d.voices || []))
+        .catch(() => setPiperVoices([]))
       fetch(`${API_BASE}/ollama/models`)
         .then((r) => r.json())
         .then((d) => setOllamaModels(d.models || []))
@@ -107,6 +140,28 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
     }
   }
 
+  const handlePlaySample = async () => {
+    if (!piperVoice || playingSample) return
+    setPlayingSample(true)
+    try {
+      const res = await fetch(`${API_BASE}/voice/sample`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: piperVoice }),
+      })
+      if (!res.ok) throw new Error('Sample failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      await audio.play()
+      audio.onended = () => URL.revokeObjectURL(url)
+    } catch {
+      // ignore
+    } finally {
+      setPlayingSample(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setSaved(false)
@@ -118,9 +173,13 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           local_model: localModel,
           openrouter_model: openrouterModel,
           custom_prompt: customPrompt,
+          rag_enabled: ragEnabled,
           rag_chat_model: ragChatModel,
           rag_embed_model: ragEmbedModel,
           memory_enabled: memoryEnabled,
+          piper_voice: piperVoice,
+          stt_backend: sttBackend,
+          faster_whisper_model: fasterWhisperModel,
         }),
       })
       setSaved(true)
@@ -201,6 +260,18 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
             <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
               Knowledge base (RAG)
             </h3>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="rag-enabled"
+                checked={ragEnabled}
+                onChange={(e) => setRagEnabled(e.target.checked)}
+                className="rounded border-[var(--border)] bg-[var(--bg-tertiary)]"
+              />
+              <label htmlFor="rag-enabled" className="text-sm text-[var(--text-secondary)]">
+                Enable RAG on all messages (when off, use &quot;check documentation&quot; or &quot;retrieve&quot; to query docs)
+              </label>
+            </div>
             <p className="text-xs text-[var(--text-secondary)]">
               Ollama must be running with the embedding model pulled (e.g. <code className="bg-[var(--bg-tertiary)] px-1 rounded">ollama pull nomic-embed-text</code>). Drop PDF, Excel, Word, or text files into the folder below, then click Index.
             </p>
@@ -279,6 +350,93 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
                 </select>
               </div>
             </div>
+          </section>
+
+          <section className="space-y-4 mb-6">
+            <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+              Voice – Speech recognition (STT)
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Choose how your speech is transcribed. Restart the app after changing.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">STT backend</label>
+                <select
+                  value={sttBackend}
+                  onChange={(e) => setSttBackend(e.target.value)}
+                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+                >
+                  {STT_BACKENDS.map((b) => (
+                    <option key={b.value} value={b.value}>{b.label}</option>
+                  ))}
+                </select>
+              </div>
+              {(sttBackend === 'faster_whisper' || sttBackend === 'auto') && (
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] block mb-1">faster-whisper model</label>
+                  <select
+                    value={fasterWhisperModel}
+                    onChange={(e) => setFasterWhisperModel(e.target.value)}
+                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+                  >
+                    {FASTER_WHISPER_MODELS.map((m) => (
+                      <option key={m.value} value={m.value} title={m.desc}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    Ryzen 9: base or small recommended. Models download on first use.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-4 mb-6">
+            <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+              Voice – Text-to-speech (TTS)
+            </h3>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Piper voices – fast, local. Download more from{' '}
+              <a href="https://huggingface.co/rhasspy/piper-voices" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+                Hugging Face
+              </a>. For more human-like quality, consider Coqui XTTS or Qwen3-TTS (requires GPU).
+            </p>
+            <div className="flex gap-2">
+              <select
+                value={piperVoice}
+                onChange={(e) => setPiperVoice(e.target.value)}
+                className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+              >
+                <option value="">Select voice</option>
+                {piperVoices.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handlePlaySample}
+                disabled={!piperVoice || playingSample}
+                className="px-4 py-3 bg-[var(--bg-tertiary)] hover:bg-[var(--border)] disabled:opacity-50 rounded-xl text-sm font-medium flex items-center gap-2"
+                title="Play sample"
+              >
+                {playingSample ? (
+                  <span className="animate-pulse">Playing…</span>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    Sample
+                  </>
+                )}
+              </button>
+            </div>
+            {piperVoices.length === 0 && (
+              <p className="text-xs text-[var(--text-secondary)]">Run <code className="bg-[var(--bg-tertiary)] px-1 rounded">./scripts/download_models.sh</code> to install voices.</p>
+            )}
           </section>
 
           <section className="space-y-4 mb-6">

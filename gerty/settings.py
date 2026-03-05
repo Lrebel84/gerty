@@ -8,6 +8,7 @@ from gerty.config import (
     DATA_DIR,
     OLLAMA_CHAT_MODEL,
     OPENROUTER_MODEL,
+    PIPER_VOICE_PATH,
     RAG_CHAT_MODEL,
     RAG_EMBED_MODEL,
 )
@@ -15,14 +16,22 @@ from gerty.config import (
 SETTINGS_FILE = DATA_DIR / "settings.json"
 logger = logging.getLogger(__name__)
 
+# Default piper voice: use last part of path (e.g. en_US-amy-medium)
+_piper_name = getattr(PIPER_VOICE_PATH, "name", None) or str(PIPER_VOICE_PATH).split("/")[-1]
+_DEFAULT_PIPER_VOICE = _piper_name.replace(".onnx", "") if _piper_name else "en_US-amy-medium"
+
 DEFAULTS = {
     "local_model": OLLAMA_CHAT_MODEL,
     "openrouter_model": OPENROUTER_MODEL,
     "custom_prompt": "You are Gerty, a helpful AI assistant. Always identify as Gerty. Format replies in Markdown: use **bold**, headings (##), bullet lists, numbered lists, and code blocks (```language) when helpful. Use emojis sparingly for clarity.",
     "provider": "local",  # "local" | "openrouter"
+    "rag_enabled": False,  # RAG off by default; use "check documentation" or enable in Settings
     "rag_chat_model": RAG_CHAT_MODEL,  # "__use_chat__" = use local_model; or command-r7b etc for RAG-optimized
     "rag_embed_model": RAG_EMBED_MODEL,
     "memory_enabled": True,
+    "piper_voice": _DEFAULT_PIPER_VOICE,
+    "stt_backend": "faster_whisper",  # faster_whisper | vosk | groq | auto (Groq when WiFi, else local)
+    "faster_whisper_model": "base",  # tiny | base | small | medium | large-v3
 }
 
 
@@ -47,9 +56,11 @@ def _validate_value(key: str, value) -> bool:
     """Validate a setting value. Returns True if valid."""
     if key == "provider":
         return value in ("local", "openrouter")
-    if key == "memory_enabled":
+    if key == "stt_backend":
+        return value in ("vosk", "faster_whisper", "groq", "auto")
+    if key in ("memory_enabled", "rag_enabled"):
         return isinstance(value, bool)
-    if key in ("local_model", "openrouter_model", "rag_chat_model", "rag_embed_model"):
+    if key in ("local_model", "openrouter_model", "rag_chat_model", "rag_embed_model", "piper_voice", "faster_whisper_model"):
         return isinstance(value, str)
     if key == "custom_prompt":
         return isinstance(value, str)

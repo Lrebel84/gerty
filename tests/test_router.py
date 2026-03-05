@@ -26,6 +26,11 @@ class TestClassifyIntent:
         assert classify_intent("explain quantum physics") == "complex"
         assert classify_intent("write code for a REST API") == "complex"
 
+    def test_rag(self):
+        assert classify_intent("check documentation") == "rag"
+        assert classify_intent("retrieve the setup guide") == "rag"
+        assert classify_intent("search my docs for API") == "rag"
+
     def test_chat_default(self):
         assert classify_intent("hello") == "chat"
         assert classify_intent("tell me a joke") == "chat"

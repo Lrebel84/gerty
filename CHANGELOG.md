@@ -288,8 +288,52 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 
 ---
 
+## [0.7.3] - 2025-03-05
+
+### Voice Chat Restored
+
+Voice chat is working again after fixes for mic button, STT hangs, and VAD sensitivity.
+
+#### Added
+- **STT backend choice** – Voice loop now respects Settings; choose faster-whisper, Vosk, Groq, or Auto (Groq when WiFi, else local)
+- **OLLAMA_VOICE_MODEL** – Voice uses `OLLAMA_VOICE_MODEL` when set (e.g. `qwen2.5:3b`) for faster replies
+- **Vosk fallback** – When faster-whisper times out or fails (e.g. under PyWebView), automatically falls back to Vosk
+- **Auto mode** – STT backend "auto" uses Groq when `GROQ_API_KEY` and network available; else faster-whisper
+
+#### Bug Fixes
+- **Mic button** – PTT start now handled when `capture.read()` times out; previously only stop was checked
+- **Capture timeout** – Increased from 50ms to 150ms for OpenWakeWord (1280 samples @ 16kHz = 80ms block duration)
+- **VAD sensitivity** – Silero threshold 0.5→0.6; energy fallback 800→1200; ambient noise no longer keeps recording
+- **VAD_MIN_SILENCE_MS** – Default reduced to 700ms for faster end-of-speech detection
+
+#### Changed
+- **STT timeout** – Reduced from 45s to 20s; fallback to Vosk on timeout
+- **Config** – `STT_BACKEND` default `faster_whisper`; `VAD_MIN_SILENCE_MS` default 700
+
+#### Logging
+- **GERTY_LOG_LEVEL=INFO** – Logs voice timing (STT, LLM, TTS) and backend choice to `gerty.log` for debugging
+
+---
+
+## [0.7.4] - 2025-03-05
+
+### RAG as Tool & Llama 3.1
+
+#### Added
+- **RAG tool** – Query documents on demand: "check documentation", "retrieve", "search my docs", etc. Routes to RAG tool like other tools.
+- **Llama 3.1 8B** – Added to model recommendations, download script, and RAG chat model dropdown
+
+#### Changed
+- **RAG default off** – `rag_enabled` defaults to `False`; RAG runs only when you ask (tool) or enable in Settings
+- **Pipeline** – RAG context injected only when `rag_enabled` is True in Settings
+- **Settings** – "Enable RAG on all messages" clarifies: when off, use "check documentation" to query
+
+#### Documentation
+- **COMMANDS.md** – Updated Knowledge Base section with RAG tool phrases
+
+---
+
 ## Known Issues
 
-- **Restart required for STT changes** – Changing STT backend or model in Settings requires restarting the app. (Voice loop uses Vosk regardless of Settings.)
-- **RAG context on every message** – RAG is now skipped for very short messages (< 15 chars). For longer messages, top-5 chunks are injected; similarity search may return marginally relevant chunks.
+- **Restart required for STT changes** – Changing STT backend or model in Settings requires restarting the app.
 - **Hallucination on non-RAG topics** – When asked about things not in memory/docs (e.g. movies), the model answers from training and may invent facts (e.g. wrong cast). RAG context is irrelevant in those cases. *Expected LLM behaviour; consider grounding external queries.*

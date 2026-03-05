@@ -149,10 +149,11 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 | Action | Example |
 |--------|---------|
-| Ask about documents | Just ask! Gerty uses indexed files from `data/knowledge/` |
+| Query documents | "check documentation" / "retrieve the setup guide" / "search my docs for API" |
 | Index documents | Settings → Knowledge base → "Index now" |
+| Enable on all messages | Settings → Knowledge base → "Enable RAG on all messages" |
 
-*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Gerty will use them when answering questions.*
+*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. By default, RAG runs only when you ask (e.g. "check documentation"). Enable in Settings to add context to every message.*
 
 ---
 

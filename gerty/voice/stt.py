@@ -171,16 +171,47 @@ class GroqSTT:
         return bool(self.api_key)
 
 
+def _network_available() -> bool:
+    """Quick check if network is reachable. Cached for ~30s to avoid per-request checks."""
+    import time
+    _cache_key = "_stt_network_ok"
+    _cache_ts = "_stt_network_ts"
+    now = time.monotonic()
+    if hasattr(_network_available, _cache_key) and hasattr(_network_available, _cache_ts):
+        if now - getattr(_network_available, _cache_ts) < 30:
+            return getattr(_network_available, _cache_key)
+    ok = False
+    try:
+        import httpx
+        r = httpx.get("https://api.groq.com/openai/v1/models", timeout=2.0)
+        ok = r.status_code in (200, 401)
+    except Exception:
+        pass
+    setattr(_network_available, _cache_key, ok)
+    setattr(_network_available, _cache_ts, now)
+    return ok
+
+
 def _create_stt_backend(
     backend: str | None = None,
     faster_whisper_model: str | None = None,
 ):
     """Create STT backend based on config or overrides from settings.
-    Tries preferred backend first, then fallbacks (vosk, groq) if it fails."""
+    Tries preferred backend first, then fallbacks (vosk, groq) if it fails.
+    'auto': use Groq when GROQ_API_KEY and network available; else faster_whisper then vosk."""
     backend = (backend or STT_BACKEND or "").strip().lower()
     model = (faster_whisper_model or FASTER_WHISPER_MODEL or "base").strip()
+    if backend == "auto":
+        if GROQ_API_KEY and _network_available():
+            try:
+                return GroqSTT()
+            except Exception as e:
+                logger.debug("Auto: Groq failed, falling back to local: %s", e)
+        backend = "faster_whisper"
     order = [backend] if backend else []
-    # Add fallbacks: prefer vosk (offline, model exists) then groq
+    # Add fallbacks: prefer faster_whisper then vosk (offline), then groq
+    if "faster_whisper" not in order:
+        order.append("faster_whisper")
     if "vosk" not in order and VOSK_MODEL_PATH.exists():
         order.append("vosk")
     if "groq" not in order and GROQ_API_KEY:
@@ -204,8 +235,8 @@ def _create_stt_backend(
             except Exception as e:
                 logger.debug("Vosk STT failed: %s", e)
     raise RuntimeError(
-        "No STT backend available. Set STT_BACKEND=faster_whisper (pip install faster-whisper) "
-        "or STT_BACKEND=vosk with VOSK_MODEL_PATH, or STT_BACKEND=groq with GROQ_API_KEY."
+        "No STT backend available. Set STT_BACKEND=faster_whisper (pip install faster-whisper), "
+        "STT_BACKEND=vosk with VOSK_MODEL_PATH, STT_BACKEND=groq with GROQ_API_KEY, or STT_BACKEND=auto."
     )
 
 

@@ -6,7 +6,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from gerty.config import (
+    GROQ_API_KEY,
     PIPER_VOICE_PATH,
+    STT_BACKEND,
     VAD_MIN_SILENCE_MS,
     VOSK_MODEL_PATH,
     VOICE_RESPONSE_TIMEOUT,
@@ -31,15 +33,24 @@ MIN_SPEECH_CHUNKS = 16
 # Minimum chunks before processing (ensure enough audio for useful transcription)
 # ~1s = 32 chunks
 MIN_RECORDING_CHUNKS = 32
-# STT timeout (faster-whisper can hang on first load)
-STT_TIMEOUT_SEC = 45
-# Read timeout: allows checking stop request when mic blocks (e.g. PyWebView/Qt)
-CAPTURE_READ_TIMEOUT_SEC = 0.05
+# STT timeout (faster-whisper can hang in PyWebView; fallback to Vosk on timeout)
+STT_TIMEOUT_SEC = 20
+# Read timeout: must exceed block duration (1280 samples @ 16kHz = 80ms) to get audio
+CAPTURE_READ_TIMEOUT_SEC = 0.15
 
 
 def _stt_available() -> bool:
-    """Check if STT backend is available. Voice loop uses Vosk."""
-    return VOSK_MODEL_PATH.exists()
+    """Check if any STT backend is available (Vosk, faster-whisper, or Groq)."""
+    if VOSK_MODEL_PATH.exists():
+        return True
+    if GROQ_API_KEY:
+        return True
+    try:
+        import faster_whisper  # noqa: F401
+        return True
+    except ImportError:
+        pass
+    return False
 
 
 def run_voice_loop(
@@ -64,7 +75,7 @@ def run_voice_loop(
         return
 
     if not _stt_available():
-        logger.debug("No STT backend available (VOSK_MODEL_PATH)")
+        logger.debug("No STT backend available (Vosk, faster-whisper, or Groq)")
         return
     onnx = PIPER_VOICE_PATH if PIPER_VOICE_PATH.suffix == ".onnx" else PIPER_VOICE_PATH.with_suffix(".onnx")
     if not onnx.exists() and not any(PIPER_VOICE_PATH.parent.glob("*.onnx")):
@@ -82,8 +93,15 @@ def run_voice_loop(
         logger.info("Voice: push-to-talk (click mic once—I detect when you stop)")
 
     settings = load_settings()
-    # Voice always uses vosk (faster_whisper fails in PyWebView; groq needs API key)
-    stt = SpeechToText(backend="vosk")
+    backend = settings.get("stt_backend") or STT_BACKEND or "faster_whisper"
+    faster_whisper_model = settings.get("faster_whisper_model")
+    stt = SpeechToText(backend=backend, faster_whisper_model=faster_whisper_model)
+    logger.info(
+        "Voice: STT=%s, faster_whisper_model=%s, local_model=%s",
+        backend,
+        faster_whisper_model or "default",
+        settings.get("local_model") or "(default)",
+    )
     tts = TextToSpeech()
     capture = AudioCapture(sample_rate=sample_rate, block_size=frame_length)
 
@@ -123,17 +141,35 @@ def run_voice_loop(
             return
         _status("processing")
         try:
-            def _transcribe():
-                return stt.transcribe_stream(audio_chunks, sample_rate)
+            t0 = time.perf_counter()
+            text = ""
+            stt_to_use = stt
+            for attempt in range(2):
+                def _transcribe():
+                    return stt_to_use.transcribe_stream(audio_chunks, sample_rate)
 
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                future = ex.submit(_transcribe)
-                try:
-                    text = future.result(timeout=STT_TIMEOUT_SEC)
-                except FuturesTimeoutError:
-                    logger.warning("STT timed out after %ds", STT_TIMEOUT_SEC)
-                    text = ""
+                with ThreadPoolExecutor(max_workers=1) as ex:
+                    future = ex.submit(_transcribe)
+                    try:
+                        text = future.result(timeout=STT_TIMEOUT_SEC)
+                        break
+                    except FuturesTimeoutError:
+                        logger.warning("STT timed out after %ds (backend=%s)", STT_TIMEOUT_SEC, type(stt_to_use).__name__)
+                        if attempt == 1 or not VOSK_MODEL_PATH.exists():
+                            text = ""
+                            break
+                        logger.info("Voice: falling back to Vosk")
+                        stt_to_use = SpeechToText(backend="vosk")
+                    except Exception as e:
+                        logger.warning("STT failed: %s", e)
+                        if attempt == 1 or not VOSK_MODEL_PATH.exists():
+                            break
+                        logger.info("Voice: falling back to Vosk")
+                        stt_to_use = SpeechToText(backend="vosk")
+            t_stt = time.perf_counter() - t0
+            logger.info("Voice: STT %.2fs | %r", t_stt, (text[:60] + "..." if text and len(text) > 60 else text))
             if text:
+                t1 = time.perf_counter()
                 with ThreadPoolExecutor(max_workers=1) as ex:
                     future = ex.submit(router_callback, text)
                     try:
@@ -141,11 +177,16 @@ def run_voice_loop(
                     except FuturesTimeoutError:
                         reply = "That took too long. Please try again or ask something simpler."
                         logger.warning("Voice response timed out after %ds", VOICE_RESPONSE_TIMEOUT)
+                t_llm = time.perf_counter() - t1
+                logger.info("Voice: LLM %.2fs | reply %d chars", t_llm, len(reply))
                 if on_exchange:
                     on_exchange(text, reply)
                 try:
+                    t2 = time.perf_counter()
                     audio = tts.synthesize(reply)
                     AudioPlayback.play(audio, tts.get_sample_rate())
+                    t_tts = time.perf_counter() - t2
+                    logger.info("Voice: TTS %.2fs | total %.2fs", t_tts, time.perf_counter() - t0)
                 except Exception as e:
                     logger.debug("TTS playback failed: %s", e)
             else:
@@ -174,8 +215,8 @@ def run_voice_loop(
         # Use VAD_MIN_SILENCE_MS; chunk duration = frame_length/sample_rate
         ms_per_chunk = 1000 * frame_length / sample_rate
         SILENCE_THRESHOLD = max(20, int(VAD_MIN_SILENCE_MS / ms_per_chunk))
-        # Higher threshold (800) tolerates ambient room noise
-        SILENCE_ENERGY = 800
+        # 1200 tolerates ambient room noise (was 800; higher = stop sooner with background sound)
+        SILENCE_ENERGY = 1200
         silence_frames = 0
         for chunk in audio_chunks[-SILENCE_THRESHOLD:]:
             arr = np.frombuffer(chunk, dtype=np.int16)
@@ -197,6 +238,8 @@ def run_voice_loop(
                     if recording and is_ptt_stop_requested():
                         clear_ptt_stop()
                         process_recording()
+                    elif consume_ptt_request():
+                        on_wake()
                     continue
             wake_detected = bool(wake and wake.process_frame(pcm))
             ptt_start = consume_ptt_request()

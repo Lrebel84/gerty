@@ -32,6 +32,12 @@ NOTES_KEYWORDS = ["note:", "note ", "notes", "remember", "add note"]
 STOPWATCH_KEYWORDS = ["stopwatch", "how long has", "elapsed"]
 TIMEZONE_KEYWORDS = ["time in", "timezone", "time zone", "what time in"]
 WEATHER_KEYWORDS = ["weather", "forecast", "temperature"]
+RAG_KEYWORDS = [
+    "check documentation", "check docs", "check my docs",
+    "retrieve", "search my docs", "search documentation",
+    "look in my docs", "look in documentation", "find in docs",
+    "what do my documents say", "what does my documentation say",
+]
 SEARCH_KEYWORDS = ["search for", "search ", "look up", "google"]
 POMODORO_KEYWORDS = ["pomodoro"]
 COMPLEX_KEYWORDS = [
@@ -56,6 +62,9 @@ def classify_intent(text: str) -> str:
     for kw in WEATHER_KEYWORDS:
         if kw in lower:
             return "weather"
+    for kw in RAG_KEYWORDS:
+        if kw in lower:
+            return "rag"
     for kw in SEARCH_KEYWORDS:
         if kw in lower:
             return "search"
@@ -141,7 +150,7 @@ class Router:
         intent = classify_intent(message)
 
         # Tool intents: delegate to tool executor
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "search", "pomodoro")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro")
         if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
 
@@ -186,7 +195,7 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "search", "pomodoro")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro")
         if intent in tool_intents and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result

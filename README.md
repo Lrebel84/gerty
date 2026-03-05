@@ -5,11 +5,11 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 ## Features
 
 - **Chat UI**: Modern dark-themed desktop app with chat window and extensible sidebar
-- **Voice** (optional): Wake word ("computer"), speech-to-text (Vosk), text-to-speech (Piper)
+- **Voice** (optional): Wake word ("computer"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
 - **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro
-- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; index and query your documents in chat
+- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; index and query your documents in chat (toggle on/off in Settings for faster chat)
 - **Web search** (optional): `pip install duckduckgo-search` for the search tool
 
 ## Setup
@@ -52,16 +52,17 @@ cp .env.example .env
 ```bash
 ollama serve
 ollama pull llama3.2
+ollama pull llama3.1:8b
 ```
 
 **Model recommendations (AMD Ryzen 9 / 27GB RAM):** For best results on high-end APUs, use a multi-model setup. Add to `.env`:
 
 ```
-OLLAMA_CHAT_MODEL=gemma3:12b      # Brain: best personality
+OLLAMA_CHAT_MODEL=llama3.1:8b     # Good balance of speed and quality
 OLLAMA_REASONING_MODEL=deepseek-r1:7b  # Specialist: coding, math
 ```
 
-Pull the models: `ollama pull gemma3:12b` and `ollama pull deepseek-r1:7b`. Check `ollama list` for available model names.
+Or: `ollama pull gemma3:12b` and `ollama pull deepseek-r1:7b`. Check `ollama list` for available model names.
 
 ### 4. RAG Knowledge Base (optional)
 
@@ -79,6 +80,16 @@ Drop PDF, Excel, Word, or text files into `data/knowledge/`, then open Settings 
 ```bash
 ./scripts/download_models.sh
 ```
+
+Voice is **fully local** by default – no API keys required:
+- **Single-click mic**: Click once to speak; auto-stops when you finish (or click again to stop early). Uses Silero VAD for end-of-speech detection.
+- **STT (speech-to-text)**: faster-whisper (default), Vosk (legacy), Groq (cloud, 216x real-time), or Auto (Groq when WiFi, else local). Settings → Voice – Speech recognition.
+- **Vosk fallback**: If faster-whisper hangs (e.g. under PyWebView), voice automatically falls back to Vosk.
+- **TTS (text-to-speech)**: Piper voices – Settings → Voice – Text-to-speech
+- **Wake word** (optional): Install `pip install openwakeword` for "hey jarvis", or set `PICOVOICE_ACCESS_KEY` for "computer"
+- **Settings → Voice – Speech recognition (STT)**: Choose STT backend and faster-whisper model (tiny, base, small, medium, large-v3). Restart app after changing.
+
+**TTS note:** Piper is fast and CPU-friendly. For more human-like quality (voice cloning, higher naturalness), consider [Coqui XTTS](https://github.com/coqui-ai/TTS) or [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) – they require more resources (GPU recommended).
 
 ### 6. Install desktop launcher (Pop!_OS / Ubuntu)
 
@@ -100,10 +111,13 @@ Or launch from your application launcher after running `./scripts/install_deskto
 
 **See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram.
 
+**See [PERFORMANCE.md](PERFORMANCE.md)** – Benchmarks and tips (e.g. Qwen &lt;1s vs Gemma ~6s first response; RAG toggle for speed).
+
 ## Project structure
 
 ```
 gerty/
+├── PERFORMANCE.md       # Benchmarks, first-response times, tips
 ├── gerty/
 │   ├── main.py          # Entry point
 │   ├── config.py        # Environment config

@@ -11,6 +11,7 @@ from gerty.tools.notes import NotesTool
 from gerty.tools.stopwatch import StopwatchTool
 from gerty.tools.timezone import TimezoneTool
 from gerty.tools.weather import WeatherTool
+from gerty.tools.rag_tool import RagTool
 from gerty.tools.search import SearchTool
 from gerty.tools.pomodoro import PomodoroTool
 
@@ -27,6 +28,7 @@ __all__ = [
     "StopwatchTool",
     "TimezoneTool",
     "WeatherTool",
+    "RagTool",
     "SearchTool",
     "PomodoroTool",
 ]

@@ -5,11 +5,23 @@ import sys
 import threading
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 # Ensure project root is on path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+from gerty.config import LOG_LEVEL, PROJECT_ROOT
+
+# Configure logging early (GERTY_LOG_LEVEL=INFO for debugging)
+_level = getattr(logging, LOG_LEVEL, logging.WARNING)
+_fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+logging.basicConfig(level=_level, format=_fmt, datefmt="%H:%M:%S")
+# When INFO or DEBUG, also write to gerty.log for tail -f during testing
+if _level <= logging.INFO:
+    _fh = logging.FileHandler(PROJECT_ROOT / "gerty.log", mode="a", encoding="utf-8")
+    _fh.setFormatter(logging.Formatter(_fmt, datefmt="%H:%M:%S"))
+    logging.getLogger().addHandler(_fh)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce noise
+logger = logging.getLogger(__name__)
 
 from gerty.config import (
     ALARM_POLL_INTERVAL,
@@ -18,6 +30,7 @@ from gerty.config import (
     SERVER_HOST,
     TELEGRAM_BOT_TOKEN,
 )
+from gerty.llm.ollama_client import OllamaClient
 from gerty.llm.router import Router
 from gerty.notifications import notify
 from gerty.pipeline import chat_pipeline_sync
@@ -27,6 +40,7 @@ from gerty.tools import (
     NotesTool,
     PomodoroTool,
     RandomTool,
+    RagTool,
     SearchTool,
     StopwatchTool,
     TimersTool,
@@ -86,6 +100,7 @@ def _on_pomodoro_done(phase: str, duration_sec: int):
 
 def main():
     # Build tool executor and router
+    ollama = OllamaClient()
     executor = ToolExecutor()
     executor.register(TimeDateTool(), ["time", "date"])
     executor.register(AlarmsTool())
@@ -97,6 +112,7 @@ def main():
     executor.register(StopwatchTool())
     executor.register(TimezoneTool())
     executor.register(WeatherTool())
+    executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
     executor.register(PomodoroTool())
 
@@ -170,16 +186,16 @@ def main():
         except Exception as e:
             logger.debug("Voice status push failed: %s", e)
 
-    if PICOVOICE_ACCESS_KEY:
-        try:
-            from gerty.voice.loop import start_voice_loop_thread
-            start_voice_loop_thread(
-                lambda msg: chat_pipeline_sync(router, msg),
-                on_exchange=on_voice_exchange,
-                on_status_change=on_voice_status,
-            )
-        except Exception as e:
-            logger.warning("Voice loop failed to start: %s", e)
+    try:
+        from gerty.voice.loop import start_voice_loop_thread
+
+        start_voice_loop_thread(
+            lambda msg: chat_pipeline_sync(router, msg, source="voice"),
+            on_exchange=on_voice_exchange,
+            on_status_change=on_voice_status,
+        )
+    except Exception as e:
+        logger.warning("Voice loop failed to start: %s", e)
 
     icon_path = str(PROJECT_ROOT / "assets" / "gerty.png")
 

@@ -3,14 +3,33 @@
 import io
 from pathlib import Path
 
-from gerty.config import PIPER_VOICE_PATH
+from gerty.config import PROJECT_ROOT, PIPER_VOICE_PATH
+from gerty.settings import load as load_settings
+
+
+def get_piper_voice_path(voice_id: str | None = None) -> Path:
+    """Resolve Piper voice path. If voice_id is None, use settings or config default."""
+    if voice_id and voice_id.strip():
+        base = PROJECT_ROOT / "models" / "piper"
+        vid = voice_id.replace(".onnx", "")
+        if base.exists():
+            for p in base.rglob(f"{vid}.onnx"):
+                if p.is_file():
+                    return p
+            if (base / f"{vid}.onnx").exists():
+                return base / f"{vid}.onnx"
+    settings = load_settings()
+    vid = (settings.get("piper_voice") or "").strip()
+    if vid:
+        return get_piper_voice_path(vid)
+    return PIPER_VOICE_PATH
 
 
 class TextToSpeech:
     """Piper-based text-to-speech."""
 
-    def __init__(self, voice_path: Path | str = PIPER_VOICE_PATH):
-        self.voice_path = Path(voice_path)
+    def __init__(self, voice_path: Path | str | None = None):
+        self.voice_path = Path(voice_path) if voice_path else get_piper_voice_path()
         self._voice = None
         self.sample_rate = 22050  # Piper default
 
