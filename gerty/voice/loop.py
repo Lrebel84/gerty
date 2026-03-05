@@ -1,9 +1,12 @@
 """Voice loop: wake word -> record -> STT -> router -> TTS -> play."""
 
+import logging
 import threading
 import time
 
 from gerty.config import PICOVOICE_ACCESS_KEY, VOSK_MODEL_PATH, PIPER_VOICE_PATH
+
+logger = logging.getLogger(__name__)
 
 
 def run_voice_loop(
@@ -47,8 +50,8 @@ def run_voice_loop(
         if on_status_change:
             try:
                 on_status_change(s)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Voice status callback failed: %s", e)
 
     def on_wake():
         nonlocal recording, audio_chunks, silence_frames
@@ -84,10 +87,11 @@ def run_voice_loop(
                         try:
                             audio = tts.synthesize(reply)
                             AudioPlayback.play(audio, tts.get_sample_rate())
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("TTS playback failed: %s", e)
                     _status("idle")
-        except Exception:
+        except Exception as e:
+            logger.debug("Voice loop iteration: %s", e)
             if recording:
                 recording = False
                 _status("idle")

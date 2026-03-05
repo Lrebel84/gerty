@@ -1,10 +1,13 @@
 """Ollama API client for local LLM."""
 
 import json
+import logging
 
 import httpx
 
-from gerty.config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from gerty.config import OLLAMA_BASE_URL, OLLAMA_CHAT_TIMEOUT, OLLAMA_HEALTH_TIMEOUT, OLLAMA_MODEL
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaClient:
@@ -18,16 +21,24 @@ class OllamaClient:
         self.base_url = base_url.rstrip("/")
         self.model = model
 
-    def chat(self, message: str, history: list[dict] | None = None, model: str | None = None) -> str:
-        """Send a message and get a response. Optional model override."""
-        messages = list(history or [])
+    def chat(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Send a message and get a response. Optional model and system prompt override."""
+        default_prompt = "Format replies in Markdown: use **bold**, headings (##), bullet lists, numbered lists, and code blocks (```language) when helpful. Use emojis sparingly for clarity."
+        system = {"role": "system", "content": system_prompt or default_prompt}
+        messages = [system] + list(history or [])
         messages.append({"role": "user", "content": message})
         model = model or self.model
 
-        with httpx.Client(timeout=180.0) as client:
+        with httpx.Client(timeout=OLLAMA_CHAT_TIMEOUT) as client:
             response = client.post(
                 f"{self.base_url}/api/chat",
-                json={"model": model, "messages": messages, "stream": False},
+                json={"model": model, "messages": messages, "stream": False, "keep_alive": "5m"},
             )
             if response.status_code == 404:
                 return (
@@ -38,7 +49,8 @@ class OllamaClient:
                 try:
                     err = response.json()
                     detail = err.get("error", str(err))
-                except Exception:
+                except Exception as e:
+                    logger.debug("Ollama 500 response parse: %s", e)
                     detail = response.text[:200] if response.text else "Unknown"
                 return (
                     f"Ollama server error (500) with model '{model}'. "
@@ -50,17 +62,25 @@ class OllamaClient:
             data = response.json()
             return data.get("message", {}).get("content", "")
 
-    def chat_stream(self, message: str, history: list[dict] | None = None, model: str | None = None):
+    def chat_stream(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
         """Stream chat response. Yields content chunks."""
-        messages = list(history or [])
+        default_prompt = "Format replies in Markdown: use **bold**, headings (##), bullet lists, numbered lists, and code blocks (```language) when helpful. Use emojis sparingly for clarity."
+        system = {"role": "system", "content": system_prompt or default_prompt}
+        messages = [system] + list(history or [])
         messages.append({"role": "user", "content": message})
         model = model or self.model
 
-        with httpx.Client(timeout=180.0) as client:
+        with httpx.Client(timeout=OLLAMA_CHAT_TIMEOUT) as client:
             with client.stream(
                 "POST",
                 f"{self.base_url}/api/chat",
-                json={"model": model, "messages": messages, "stream": True},
+                json={"model": model, "messages": messages, "stream": True, "keep_alive": "5m"},
             ) as response:
                 if response.status_code == 404:
                     yield f"Model '{model}' not found. Run: ollama pull {model}"
@@ -77,14 +97,16 @@ class OllamaClient:
                         chunk = data.get("message", {}).get("content", "")
                         if chunk:
                             yield chunk
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        logger.debug("Ollama stream JSON parse: %s", e)
                         continue
 
     def is_available(self) -> bool:
         """Check if Ollama is running and reachable."""
         try:
-            with httpx.Client(timeout=2.0) as client:
+            with httpx.Client(timeout=OLLAMA_HEALTH_TIMEOUT) as client:
                 r = client.get(f"{self.base_url}/api/tags")
                 return r.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.debug("Ollama availability check failed: %s", e)
             return False

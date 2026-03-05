@@ -1,9 +1,11 @@
 """Document parsers for RAG ingestion."""
 
 import csv
+import logging
 from pathlib import Path
 from typing import Iterator
 
+logger = logging.getLogger(__name__)
 SUPPORTED_EXTENSIONS = {".pdf", ".xlsx", ".xls", ".csv", ".docx", ".txt", ".md", ""}
 
 
@@ -96,5 +98,5 @@ def parse_folder(folder: Path) -> Iterator[tuple[str, dict]]:
         if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
             try:
                 yield from parse_file(path)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Parse failed for %s: %s", path.name, e)

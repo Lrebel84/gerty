@@ -1,9 +1,12 @@
 """Ollama embeddings for RAG."""
 
+import logging
+
 import httpx
 
 from gerty.config import OLLAMA_BASE_URL
 
+logger = logging.getLogger(__name__)
 DEFAULT_EMBED_MODEL = "nomic-embed-text"
 
 
@@ -21,11 +24,14 @@ def check_embed_ready(model: str = DEFAULT_EMBED_MODEL, base_url: str = OLLAMA_B
             if r.status_code == 404:
                 return False, f"Embedding model '{model}' not found. Run: ollama pull {model}"
             return False, f"Ollama error {r.status_code}: {r.text[:150]}"
-    except httpx.ConnectError:
+    except httpx.ConnectError as e:
+        logger.debug("Embed check connect failed: %s", e)
         return False, "Cannot connect to Ollama. Is it running? Start with: ollama serve"
-    except httpx.TimeoutException:
+    except httpx.TimeoutException as e:
+        logger.debug("Embed check timeout: %s", e)
         return False, "Ollama timed out. Try: ollama serve"
     except Exception as e:
+        logger.warning("Embed check failed: %s", e)
         return False, str(e)
 
 
@@ -37,7 +43,7 @@ def embed(texts: list[str], model: str = DEFAULT_EMBED_MODEL, base_url: str = OL
     with httpx.Client(timeout=120.0) as client:
         response = client.post(
             f"{base_url}/api/embed",
-            json={"model": model, "input": texts},
+            json={"model": model, "input": texts, "keep_alive": "5m"},
         )
         if response.status_code != 200:
             raise RuntimeError(f"Ollama embed failed: {response.status_code} {response.text[:200]}")

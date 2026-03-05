@@ -1,11 +1,12 @@
 [Desktop Entry]
 Name=Gerty
 Comment=Local AI voice assistant
-Exec=/home/liam/gerty/.venv/bin/python -m gerty.main
+Exec=/home/liam/gerty/.venv/bin/python -m gerty
 Path=/home/liam/gerty
-Icon=/home/liam/gerty/assets/gerty.svg
+Icon=/home/liam/gerty/assets/gerty.png
 Type=Application
 Terminal=false
-Categories=Utility;Audio;
+Categories=Utility;Audio;Chat;
+Keywords=AI;voice;assistant;chat;LLM;
 StartupNotify=true
 StartupWMClass=Gerty

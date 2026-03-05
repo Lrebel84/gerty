@@ -5,13 +5,15 @@ import { MarkdownMessage } from './MarkdownMessage'
 interface ChatWindowProps {
   messages: Message[]
   onSend: (content: string, provider?: string) => void
+  onNewChat?: () => void
+  localModel?: string
   voiceStatus: 'idle' | 'listening' | 'processing'
   provider: 'local' | 'openrouter'
   onProviderChange: (provider: 'local' | 'openrouter') => void
   onVoiceStatusChange?: (status: 'idle' | 'listening' | 'processing') => void
 }
 
-export function ChatWindow({ messages, onSend, voiceStatus, provider, onProviderChange }: ChatWindowProps) {
+export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatus, provider, onProviderChange }: ChatWindowProps) {
   const [input, setInput] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -35,6 +37,15 @@ export function ChatWindow({ messages, onSend, voiceStatus, provider, onProvider
           <img src="/gerty.png" alt="Gerty" className="h-9 w-9 object-contain" />
         </div>
         <div className="flex items-center gap-3">
+          {onNewChat && messages.length > 0 && (
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              New chat
+            </button>
+          )}
           <div className="flex rounded-lg bg-[var(--bg-tertiary)] p-0.5">
             <button
               type="button"
@@ -55,6 +66,11 @@ export function ChatWindow({ messages, onSend, voiceStatus, provider, onProvider
               OpenRouter
             </button>
           </div>
+          {localModel && provider === 'local' && (
+            <span className="text-xs text-[var(--text-secondary)] truncate max-w-[120px]" title={localModel}>
+              {localModel}
+            </span>
+          )}
           <span
             className={`text-sm px-2 py-1 rounded ${
               voiceStatus === 'listening'

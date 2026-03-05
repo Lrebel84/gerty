@@ -24,6 +24,9 @@ websockets>=12.0
 # Config
 python-dotenv>=1.0.0
 
+# Web search (optional, for search tool)
+duckduckgo-search>=6.0.0
+
 # RAG
 chromadb>=0.4.0
 pypdf>=4.0.0

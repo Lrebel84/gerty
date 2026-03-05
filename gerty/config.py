@@ -27,11 +27,24 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_IDS = [
-    int(x.strip())
-    for x in os.getenv("TELEGRAM_CHAT_IDS", "").split(",")
-    if x.strip().isdigit()
-]
+
+
+def _parse_telegram_chat_ids() -> list[int]:
+    """Parse TELEGRAM_CHAT_IDS, skipping invalid entries."""
+    result: list[int] = []
+    raw = os.getenv("TELEGRAM_CHAT_IDS", "")
+    for x in raw.split(","):
+        s = x.strip()
+        if not s or not s.isdigit():
+            continue
+        try:
+            result.append(int(s))
+        except (ValueError, OverflowError):
+            continue
+    return result
+
+
+TELEGRAM_CHAT_IDS = _parse_telegram_chat_ids()
 
 # Porcupine wake word
 PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
@@ -45,9 +58,25 @@ PIPER_VOICE_PATH = PROJECT_ROOT / _piper_path if not Path(_piper_path).is_absolu
 # Data directory for alarms etc.
 DATA_DIR = PROJECT_ROOT / "data"
 ALARMS_FILE = DATA_DIR / "alarms.json"
+CHAT_HISTORY_FILE = DATA_DIR / "chat_history.json"
 
 # RAG knowledge base
 KNOWLEDGE_DIR = DATA_DIR / "knowledge"
 RAG_DIR = DATA_DIR / "rag"
 RAG_EMBED_MODEL = os.getenv("RAG_EMBED_MODEL", "nomic-embed-text")
-RAG_CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "command-r7b")
+RAG_CHAT_MODEL = os.getenv("RAG_CHAT_MODEL", "__use_chat__")
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+RAG_MIN_MSG_LEN = int(os.getenv("RAG_MIN_MSG_LEN", "15"))
+RAG_SUMMARIZE_THRESHOLD = int(os.getenv("RAG_SUMMARIZE_THRESHOLD", "15"))
+# Max distance for relevance (Chroma uses cosine distance; lower = better; typical keep < 0.8)
+RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.9"))
+
+# Server
+SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
+ALARM_POLL_INTERVAL = int(os.getenv("ALARM_POLL_INTERVAL", "5"))
+
+# HTTP timeouts (seconds)
+HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))
+HTTP_TIMEOUT_OPENROUTER = float(os.getenv("HTTP_TIMEOUT_OPENROUTER", "15"))
+OLLAMA_CHAT_TIMEOUT = float(os.getenv("OLLAMA_CHAT_TIMEOUT", "180"))
+OLLAMA_HEALTH_TIMEOUT = float(os.getenv("OLLAMA_HEALTH_TIMEOUT", "2"))

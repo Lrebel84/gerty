@@ -11,19 +11,41 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from gerty.config import OLLAMA_BASE_URL, TELEGRAM_BOT_TOKEN, PICOVOICE_ACCESS_KEY
+from gerty.config import (
+    ALARM_POLL_INTERVAL,
+    OLLAMA_BASE_URL,
+    PICOVOICE_ACCESS_KEY,
+    SERVER_HOST,
+    TELEGRAM_BOT_TOKEN,
+)
 from gerty.llm.router import Router
 from gerty.notifications import notify
-from gerty.tools import ToolExecutor, TimeDateTool, AlarmsTool, TimersTool
+from gerty.pipeline import chat_pipeline_sync
+from gerty.tools import (
+    AlarmsTool,
+    CalculatorTool,
+    NotesTool,
+    PomodoroTool,
+    RandomTool,
+    SearchTool,
+    StopwatchTool,
+    TimersTool,
+    TimeDateTool,
+    TimezoneTool,
+    ToolExecutor,
+    UnitsTool,
+    WeatherTool,
+)
 from gerty.tools.alarms import get_pending_alarms_for_trigger
 from gerty.tools.timers import register_timer_callback
+from gerty.tools.pomodoro import register_pomodoro_callback
 from gerty.ui.server import create_app
 from gerty.ui.bridge import create_bridge
 
 
 def _run_server(app, port: int):
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=SERVER_HOST, port=port, log_level="warning")
 
 
 def _run_telegram_bot(router_callback):
@@ -42,7 +64,7 @@ def _alarm_trigger_loop():
                 notify(f"Alarm: {msg}", channels=["tts", "system", "telegram"])
         except Exception as e:
             logger.debug("Alarm loop: %s", e)
-        time.sleep(5)
+        time.sleep(ALARM_POLL_INTERVAL)
 
 
 def _on_timer_done(label: str, duration_sec: int):
@@ -55,12 +77,28 @@ def _on_timer_done(label: str, duration_sec: int):
     notify(msg, channels=["tts", "system", "telegram"])
 
 
+def _on_pomodoro_done(phase: str, duration_sec: int):
+    """Called when a pomodoro phase completes."""
+    mins = duration_sec // 60
+    msg = f"Pomodoro {phase} complete ({mins}m)"
+    notify(msg, channels=["tts", "system", "telegram"])
+
+
 def main():
     # Build tool executor and router
     executor = ToolExecutor()
     executor.register(TimeDateTool(), ["time", "date"])
     executor.register(AlarmsTool())
     executor.register(TimersTool())
+    executor.register(CalculatorTool())
+    executor.register(UnitsTool())
+    executor.register(RandomTool())
+    executor.register(NotesTool())
+    executor.register(StopwatchTool())
+    executor.register(TimezoneTool())
+    executor.register(WeatherTool())
+    executor.register(SearchTool())
+    executor.register(PomodoroTool())
 
     router = Router(tool_executor=executor.execute)
 
@@ -69,9 +107,9 @@ def main():
         import httpx
         r = httpx.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=2)
         if r.status_code != 200:
-            print("Warning: Ollama not responding. Start with: ollama serve")
-    except Exception:
-        print("Warning: Ollama not running. Start with: ollama serve")
+            logger.warning("Ollama not responding. Start with: ollama serve")
+    except Exception as e:
+        logger.warning("Ollama not running: %s. Start with: ollama serve", e)
 
     # Build FastAPI app
     app = create_app(router)
@@ -84,12 +122,15 @@ def main():
     # Start Telegram bot in background if configured
     if TELEGRAM_BOT_TOKEN:
         telegram_thread = threading.Thread(
-            target=_run_telegram_bot, args=(router.route,), daemon=True
+            target=_run_telegram_bot,
+            args=(lambda msg: chat_pipeline_sync(router, msg),),
+            daemon=True,
         )
         telegram_thread.start()
 
-    # Register timer callback and start alarm trigger loop
+    # Register timer and pomodoro callbacks; start alarm trigger loop
     register_timer_callback(_on_timer_done)
+    register_pomodoro_callback(_on_pomodoro_done)
     alarm_thread = threading.Thread(target=_alarm_trigger_loop, daemon=True)
     alarm_thread.start()
 
@@ -103,7 +144,7 @@ def main():
     api = create_bridge(router)
     window = webview.create_window(
         "Gerty",
-        f"http://127.0.0.1:{port}",
+        f"http://{SERVER_HOST}:{port}",
         width=900,
         height=700,
         resizable=True,
@@ -118,22 +159,22 @@ def main():
             window.evaluate_js(
                 f"window.__gertyAddVoiceExchange?.({json.dumps(user_msg)}, {json.dumps(assistant_msg)})"
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Voice exchange push failed: %s", e)
 
     def on_voice_status(status: str):
         """Push voice status to UI."""
         import json
         try:
             window.evaluate_js(f"window.__gertySetVoiceStatus?.({json.dumps(status)})")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Voice status push failed: %s", e)
 
     if PICOVOICE_ACCESS_KEY:
         try:
             from gerty.voice.loop import start_voice_loop_thread
             start_voice_loop_thread(
-                router.route,
+                lambda msg: chat_pipeline_sync(router, msg),
                 on_exchange=on_voice_exchange,
                 on_status_change=on_voice_status,
             )
@@ -141,6 +182,9 @@ def main():
             logger.warning("Voice loop failed to start: %s", e)
 
     icon_path = str(PROJECT_ROOT / "assets" / "gerty.png")
+
+    # No on_closing handler - it blocked the window (evaluate_js + httpx can hang).
+    # Chat is already saved after each message and on beforeunload.
     webview.start(debug=False, gui="qt", icon=icon_path)
 
 

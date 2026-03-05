@@ -8,8 +8,9 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Voice** (optional): Wake word ("computer"), speech-to-text (Vosk), text-to-speech (Piper)
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
-- **Toolkit**: Time, date, alarms, timers
+- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; index and query your documents in chat
+- **Web search** (optional): `pip install duckduckgo-search` for the search tool
 
 ## Setup
 
@@ -97,6 +98,8 @@ python -m gerty
 
 Or launch from your application launcher after running `./scripts/install_desktop.sh`.
 
+**See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram.
+
 ## Project structure
 
 ```
@@ -107,7 +110,7 @@ gerty/
 │   ├── llm/             # Ollama, OpenRouter, router
 │   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
-│   ├── tools/           # Time, alarms, timers
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/

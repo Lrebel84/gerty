@@ -2,12 +2,15 @@
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
-from gerty.config import DATA_DIR
+logger = logging.getLogger(__name__)
+
+from gerty.config import DATA_DIR, RAG_EMBED_MODEL, RAG_RELEVANCE_THRESHOLD
 from gerty.rag.chunker import chunk_text
 from gerty.rag.embedder import check_embed_ready, embed
 from gerty.rag.parsers import parse_file
@@ -17,13 +20,14 @@ RAG_DIR = DATA_DIR / "rag"
 CHROMA_PATH = RAG_DIR / "chroma_db"
 INDEX_FILE = RAG_DIR / "index.json"
 COLLECTION_NAME = "gerty_knowledge"
+MEMORY_COLLECTION_NAME = "gerty_memory"
 
 
 class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
     """ChromaDB embedding function using Ollama."""
 
-    def __init__(self, model: str = "nomic-embed-text"):
-        self.model = model
+    def __init__(self, model: str | None = None):
+        self.model = model or RAG_EMBED_MODEL
 
     def __call__(self, input: Documents) -> Embeddings:
         if not input:
@@ -57,11 +61,12 @@ def _save_index(data: dict) -> None:
 
 def index_folder(
     folder: Path | None = None,
-    embed_model: str = "nomic-embed-text",
+    embed_model: str | None = None,
 ) -> dict[str, Any]:
     """Index all supported files in the knowledge folder. Returns status dict."""
     folder = folder or KNOWLEDGE_DIR
     folder = Path(folder)
+    embed_model = embed_model or RAG_EMBED_MODEL
     RAG_DIR.mkdir(parents=True, exist_ok=True)
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -74,8 +79,8 @@ def index_folder(
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
     try:
         client.delete_collection(COLLECTION_NAME)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Delete collection (expected if new): %s", e)
     coll = client.create_collection(
         COLLECTION_NAME,
         embedding_function=OllamaEmbeddingFunction(model=embed_model),
@@ -127,49 +132,155 @@ def index_folder(
     return result
 
 
-def query(text: str, top_k: int = 5, embed_model: str = "nomic-embed-text") -> list[tuple[str, dict]]:
-    """Query the vector store. Returns list of (chunk_text, metadata)."""
+def query(
+    text: str,
+    top_k: int = 5,
+    embed_model: str | None = None,
+    relevance_threshold: float | None = None,
+) -> list[tuple[str, dict]]:
+    """Query both knowledge and memory collections. Returns merged list of (chunk_text, metadata).
+    Chunks with distance above relevance_threshold are filtered out."""
     if not CHROMA_PATH.exists():
         return []
+    embed_model = embed_model or RAG_EMBED_MODEL
+    relevance_threshold = relevance_threshold if relevance_threshold is not None else RAG_RELEVANCE_THRESHOLD
     try:
         import chromadb
 
+        # Embed once, query both collections with same embedding (avoids 2x Ollama calls)
+        query_embedding = embed([text], model=embed_model)
+        if not query_embedding:
+            return []
+
         client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-        coll = client.get_collection(
-            COLLECTION_NAME,
-            embedding_function=OllamaEmbeddingFunction(model=embed_model),
-        )
-        n = coll.count()
-        if n == 0:
-            return []
-        results = coll.query(query_texts=[text], n_results=min(top_k, n))
-        if not results or not results.get("documents"):
-            return []
-        chunks = []
-        docs = results["documents"][0]
-        metas = results.get("metadatas", [[]])[0] or []
-        for i, doc in enumerate(docs):
-            meta = metas[i] if i < len(metas) else {}
-            chunks.append((doc, meta))
+        ef = OllamaEmbeddingFunction(model=embed_model)
+        chunks: list[tuple[str, dict]] = []
+        seen: set[str] = set()
+
+        # Query knowledge collection with pre-computed embedding
+        try:
+            coll = client.get_collection(COLLECTION_NAME, embedding_function=ef)
+            n = coll.count()
+            if n > 0:
+                k_docs = min(top_k, n)
+                results = coll.query(query_embeddings=query_embedding, n_results=k_docs)
+                if results and results.get("documents"):
+                    docs = results["documents"][0]
+                    metas = results.get("metadatas", [[]])[0] or []
+                    dists = results.get("distances", [[]])[0] or []
+                    for i, doc in enumerate(docs):
+                        if doc and doc not in seen:
+                            d = dists[i] if i < len(dists) else 0
+                            if d <= relevance_threshold:
+                                seen.add(doc)
+                                meta = metas[i] if i < len(metas) else {}
+                                chunks.append((doc, meta))
+        except Exception as e:
+            logger.debug("Knowledge collection query failed: %s", e)
+
+        # Query memory collection with same embedding
+        try:
+            coll = client.get_collection(MEMORY_COLLECTION_NAME, embedding_function=ef)
+            n = coll.count()
+            if n > 0:
+                k_mem = min(top_k, n)
+                results = coll.query(query_embeddings=query_embedding, n_results=k_mem)
+                if results and results.get("documents"):
+                    docs = results["documents"][0]
+                    metas = results.get("metadatas", [[]])[0] or []
+                    dists = results.get("distances", [[]])[0] or []
+                    for i, doc in enumerate(docs):
+                        if doc and doc not in seen:
+                            d = dists[i] if i < len(dists) else 0
+                            if d <= relevance_threshold:
+                                seen.add(doc)
+                                meta = metas[i] if i < len(metas) else {}
+                                chunks.append((doc, meta))
+        except Exception as e:
+            logger.debug("Memory collection query failed: %s", e)
+
         return chunks
-    except Exception:
+    except Exception as e:
+        logger.debug("RAG query failed: %s", e)
         return []
 
 
+def add_memory_facts(facts: list[str], embed_model: str | None = None) -> int:
+    """Add extracted user facts to the memory collection. Incremental, no rebuild. Returns count added."""
+    if not facts:
+        return 0
+    facts = [f.strip() for f in facts if f and f.strip()]
+    if not facts:
+        return 0
+    embed_model = embed_model or RAG_EMBED_MODEL
+    try:
+        import chromadb
+        from datetime import datetime
+
+        client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+        try:
+            coll = client.get_collection(
+                MEMORY_COLLECTION_NAME,
+                embedding_function=OllamaEmbeddingFunction(model=embed_model),
+            )
+        except Exception as e:
+            logger.debug("Memory collection get failed, creating: %s", e)
+            coll = client.create_collection(
+                MEMORY_COLLECTION_NAME,
+                embedding_function=OllamaEmbeddingFunction(model=embed_model),
+            )
+        ts = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        ids = [f"memory_{ts}_{i}" for i in range(len(facts))]
+        metas = [{"source": "memory", "file": "user_facts"} for _ in facts]
+        coll.add(ids=ids, documents=facts, metadatas=metas)
+        return len(facts)
+    except Exception as e:
+        logger.warning("add_memory_facts failed: %s", e)
+        return 0
+
+
 def is_indexed() -> bool:
-    """Check if RAG has indexed documents."""
-    if not INDEX_FILE.exists():
-        return False
-    data = _load_index()
-    return bool(data.get("files"))
+    """Check if RAG has indexed documents or memory to query."""
+    if INDEX_FILE.exists():
+        data = _load_index()
+        if data.get("files"):
+            return True
+    if CHROMA_PATH.exists():
+        try:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+            coll = client.get_collection(
+                MEMORY_COLLECTION_NAME,
+                embedding_function=OllamaEmbeddingFunction(model=RAG_EMBED_MODEL),
+            )
+            if coll.count() > 0:
+                return True
+        except Exception as e:
+            logger.debug("is_indexed memory check failed: %s", e)
+    return False
 
 
 def get_status() -> dict[str, Any]:
     """Return RAG status for API."""
     data = _load_index()
+    memory_count = 0
+    if CHROMA_PATH.exists():
+        try:
+            import chromadb
+
+            client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+            coll = client.get_collection(
+                MEMORY_COLLECTION_NAME,
+                embedding_function=OllamaEmbeddingFunction(model=RAG_EMBED_MODEL),
+            )
+            memory_count = coll.count()
+        except Exception as e:
+            logger.debug("get_status memory count failed: %s", e)
     return {
         "indexed": bool(data.get("files")),
         "file_count": len(data.get("files", {})),
         "last_indexed": data.get("last_indexed"),
         "knowledge_path": str(KNOWLEDGE_DIR),
+        "memory_count": memory_count,
     }

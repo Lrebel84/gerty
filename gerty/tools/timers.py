@@ -1,11 +1,14 @@
 """Timer tool: countdown timers."""
 
+import logging
 import re
 import threading
 import time
 from typing import Callable
 
 from gerty.llm.router import parse_timer_duration
+
+logger = logging.getLogger(__name__)
 from gerty.tools.base import Tool
 
 # In-memory active timers: label -> (Timer, duration_sec, start_time)
@@ -17,8 +20,8 @@ def _notify_timer_done(label: str, duration_sec: int):
     for cb in _timer_callbacks:
         try:
             cb(label, duration_sec)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Timer callback failed: %s", e)
 
 
 def register_timer_callback(cb: Callable[[str, int], None]):

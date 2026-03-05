@@ -138,3 +138,87 @@ Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.
 - `data/knowledge/` – User drops files here
 - `data/rag/chroma_db/` – ChromaDB persistence
 - `data/rag/index.json` – Index metadata; dirs created on app startup
+
+## [0.5.0] - 2025-03-05
+
+### Long-term Memory & Chat Persistence
+
+#### Added
+- **Long-term memory** – Extracts user-stated facts (family, likes, work, etc.) when saving chat; stores in `gerty_memory` ChromaDB collection; merged with docs in RAG queries
+- **Fact extraction** – LLM extracts facts from user messages when saving (2+ user messages); only user-stated facts, excludes questions/requests; deduplication via content hash
+- **Chat persistence** – `GET/PUT/DELETE /api/chat/history`; history saved after each message and on beforeunload; resume on startup
+- **Settings** – `memory_enabled` toggle; "New chat" button clears history
+- **Data** – `data/chat_history.json`; `data/rag/chroma_db/` now has `gerty_memory` collection
+
+#### Performance
+- **Single embedding per RAG query** – Embed query once, use for both knowledge and memory collections (was 2x Ollama calls)
+- **Summarization** – Only when 15+ messages AND no RAG context; skip when RAG provides focus
+- **RAG chat model default** – `__use_chat__` so Qwen (or selected local model) used by default; RAG model is optional override
+- **RAG latency** – Skip RAG for very short messages (< 15 chars); `keep_alive: "5m"` on embed and chat to keep models loaded; warmup on startup when RAG indexed (preload embed + chat models)
+
+#### Model & Prompt
+- **Explicit model passing** – Frontend sends `local_model` and `openrouter_model` with every chat request
+- **Model display** – Active local model shown in chat header when using Local provider
+- **RAG prompt** – When "Use chat model": softer context ("When relevant, you may use... Keep your usual personality"); when RAG model: focused context ("Use this context to answer")
+
+#### Bug Fixes
+- **Close handler removed** – `on_closing` (evaluate_js + httpx) blocked window close; rely on beforeunload and per-message save
+- **Save on close** – `skip_extract=true` for quick save; extraction only on normal message saves
+
+## [0.6.0] - 2025-03-05
+
+### Security & Robustness (Build Review)
+
+#### Security
+- **Path traversal fix** – SPA static file serving now resolves paths and enforces they stay under `FRONTEND_DIST`
+- **Error sanitization** – Chat, stream, RAG index, and Telegram errors return generic user-facing messages; full exceptions logged server-side
+- **TELEGRAM_CHAT_IDS** – Safer parsing with validation for invalid/malformed input
+
+#### Observability
+- **Logging** – Added structured logging across server, RAG, LLM, voice, settings, and tools; replaced silent `except Exception: pass` with `logger.debug`/`logger.warning`/`logger.exception`
+- **Print removed** – Ollama availability warnings now use `logger.warning`
+
+#### Feature Parity
+- **Chat pipeline** (`gerty/pipeline.py`) – Shared pipeline applies RAG, memory, custom prompt before routing; Voice and Telegram now get RAG, memory, and custom prompt (previously bypassed)
+
+#### Robustness
+- **Settings validation** – `provider`, `memory_enabled`, and string fields validated before save
+- **Configurable values** – New env vars: `SERVER_HOST`, `ALARM_POLL_INTERVAL`, `HTTP_TIMEOUT_*`, `OLLAMA_*_TIMEOUT`, `RAG_TOP_K`, `RAG_MIN_MSG_LEN`, `RAG_SUMMARIZE_THRESHOLD`, `RAG_RELEVANCE_THRESHOLD`
+- **RAG store** – Uses `RAG_EMBED_MODEL` from config consistently
+
+#### RAG Polish
+- **Relevance threshold** – `RAG_RELEVANCE_THRESHOLD` filters out chunks with distance above threshold (default 0.9)
+- **Grounding note** – When no RAG context, prompt includes a note to acknowledge uncertainty on external topics (movies, current events)
+
+#### Quality
+- **Tests** – Added `tests/` with pytest: router intent/parse_timer_duration, settings load/save/validation, app creation (19 tests)
+- **pyproject.toml** – Pytest config, ruff lint/format settings
+
+### New Tools (Tier 1 & 2)
+
+#### Tier 1 – Zero deps
+- **Calculator** – Arithmetic and percentages ("what is 15% of 80")
+- **Unit conversion** – Temperature, length, weight ("convert 5 miles to km")
+- **Random** – Coin flip, dice roll, pick number, choose from options
+- **Quick notes** – Add, list, clear notes (`data/notes.txt`)
+- **Stopwatch** – Start, elapsed, stop
+- **Timezone** – Time in another city (London, Tokyo, NYC, etc.)
+
+#### Tier 2 – Minimal deps
+- **Weather** – Current conditions via Open-Meteo, no API key ("weather in London")
+- **Web search** – DuckDuckGo via `duckduckgo-search` ("search for Python tutorial")
+- **Pomodoro** – 25 min work, 5 min break; notifications when each phase ends
+
+#### Dependencies
+- Added `duckduckgo-search>=6.0.0` (optional, for search tool)
+
+#### Documentation
+- **COMMANDS.md** – User guide listing all tools and example commands
+- **README** – Updated toolkit list and link to COMMANDS.md
+
+---
+
+## Known Issues
+
+- **RAG context on every message** – RAG is now skipped for very short messages (< 15 chars). For longer messages, top-5 chunks are injected; similarity search may return marginally relevant chunks. *Planned: add relevance threshold.*
+- **Hallucination on non-RAG topics** – When asked about things not in memory/docs (e.g. movies), the model answers from training and may invent facts (e.g. wrong cast). RAG context is irrelevant in those cases. *Expected LLM behaviour; consider grounding external queries.*

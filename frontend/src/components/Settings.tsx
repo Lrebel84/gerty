@@ -15,6 +15,7 @@ interface SettingsData {
   provider: string
   rag_chat_model: string
   rag_embed_model: string
+  memory_enabled: boolean
 }
 
 interface RAGStatus {
@@ -22,6 +23,7 @@ interface RAGStatus {
   file_count: number
   last_indexed: string | null
   knowledge_path?: string
+  memory_count?: number
 }
 
 const RAG_CHAT_MODELS = ['command-r7b', 'granite3.2:8b', 'command-r:35b']
@@ -33,11 +35,12 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [customPrompt, setCustomPrompt] = useState('')
   const [ollamaModels, setOllamaModels] = useState<string[]>([])
   const [openrouterModels, setOpenrouterModels] = useState<string[]>([])
-  const [ragChatModel, setRagChatModel] = useState('command-r7b')
+  const [ragChatModel, setRagChatModel] = useState('__use_chat__')
   const [ragEmbedModel, setRagEmbedModel] = useState('nomic-embed-text')
   const [ragStatus, setRagStatus] = useState<RAGStatus | null>(null)
   const [ragIndexing, setRagIndexing] = useState(false)
   const [ragIndexMessage, setRagIndexMessage] = useState<string | null>(null)
+  const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -49,8 +52,9 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           setLocalModel(d.local_model || '')
           setOpenrouterModel(d.openrouter_model || '')
           setCustomPrompt(d.custom_prompt || '')
-          setRagChatModel(d.rag_chat_model || 'command-r7b')
+          setRagChatModel(d.rag_chat_model || '__use_chat__')
           setRagEmbedModel(d.rag_embed_model || 'nomic-embed-text')
+          setMemoryEnabled(d.memory_enabled !== false)
         })
         .catch(() => {})
       fetch(`${API_BASE}/ollama/models`)
@@ -116,6 +120,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           custom_prompt: customPrompt,
           rag_chat_model: ragChatModel,
           rag_embed_model: ragEmbedModel,
+          memory_enabled: memoryEnabled,
         }),
       })
       setSaved(true)
@@ -207,6 +212,23 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
             <p className="text-xs text-[var(--text-secondary)]">
               To test from terminal: <code className="bg-[var(--bg-tertiary)] px-1 rounded">python3 -m gerty.rag</code>
             </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="memory-enabled"
+                checked={memoryEnabled}
+                onChange={(e) => setMemoryEnabled(e.target.checked)}
+                className="rounded border-[var(--border)] bg-[var(--bg-tertiary)]"
+              />
+              <label htmlFor="memory-enabled" className="text-sm text-[var(--text-secondary)]">
+                Long-term memory (extract facts from chat when summarising)
+              </label>
+            </div>
+            {ragStatus?.memory_count != null && ragStatus.memory_count > 0 && (
+              <p className="text-xs text-[var(--text-secondary)]">
+                {ragStatus.memory_count} fact{ragStatus.memory_count === 1 ? '' : 's'} in memory
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-[var(--text-secondary)]">
@@ -230,7 +252,9 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-[var(--text-secondary)] block mb-1">RAG chat model</label>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1" title="When RAG context (docs/memory) is retrieved, which model to use. 'Use chat model' keeps your normal Qwen for personality and formatting.">
+                  Model when RAG context is used
+                </label>
                 <select
                   value={ragChatModel}
                   onChange={(e) => setRagChatModel(e.target.value)}

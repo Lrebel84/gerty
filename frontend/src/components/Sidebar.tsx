@@ -19,6 +19,7 @@ interface SidebarProps {
   open: boolean
   onToggle: () => void
   voiceStatus?: 'idle' | 'listening' | 'processing'
+  onSettingsSave?: () => void
 }
 
 function formatRemaining(sec: number): string {
@@ -28,7 +29,7 @@ function formatRemaining(sec: number): string {
   return `${s}s`
 }
 
-export function Sidebar({ open, onToggle }: SidebarProps) {
+export function Sidebar({ open, onToggle, onSettingsSave }: SidebarProps) {
   const [alarms, setAlarms] = useState<Alarm[]>([])
   const [timers, setTimers] = useState<Timer[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -164,7 +165,7 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
           </button>
         </section>
       </nav>
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} onSave={onSettingsSave} />
     </aside>
   )
 }

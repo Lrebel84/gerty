@@ -1,6 +1,7 @@
 """PyWebView JS bridge for Gerty."""
 
 from gerty.llm.router import Router
+from gerty.pipeline import chat_pipeline_sync
 
 
 def create_bridge(router: Router):
@@ -13,7 +14,7 @@ def create_bridge(router: Router):
 
         def sendMessage(self, message: str) -> str:
             """Handle message from frontend. Returns reply."""
-            reply = self._router.route(message, history=self._history, source="chat")
+            reply = chat_pipeline_sync(self._router, message, history=self._history)
             self._history.append({"role": "user", "content": message})
             self._history.append({"role": "assistant", "content": reply})
             # Keep last 20 messages for context

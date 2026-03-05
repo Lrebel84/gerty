@@ -2,7 +2,14 @@
 import sys
 
 from gerty.rag.embedder import check_embed_ready
-from gerty.rag.store import KNOWLEDGE_DIR, get_status, index_folder, is_indexed, query
+from gerty.rag.store import (
+    KNOWLEDGE_DIR,
+    add_memory_facts,
+    get_status,
+    index_folder,
+    is_indexed,
+    query,
+)
 
 
 def main():
@@ -42,11 +49,16 @@ def main():
     status = get_status()
     print(f"   Status: {status}\n")
 
-    print("4. Test query: 'tell me about my family'")
-    chunks = query("tell me about my family", top_k=3)
-    print(f"   Retrieved {len(chunks)} chunks")
-    for i, (text, meta) in enumerate(chunks[:2], 1):
-        print(f"   Chunk {i} ({meta.get('file', '?')}): {text[:80]}...")
+    print("4. Test memory: add a fact")
+    n = add_memory_facts(["User prefers dark mode"], embed_model="nomic-embed-text")
+    print(f"   Added {n} fact(s)")
+
+    print("\n5. Test query: 'tell me about my family'")
+    chunks = query("tell me about my family", top_k=4)
+    print(f"   Retrieved {len(chunks)} chunks (docs + memory)")
+    for i, (text, meta) in enumerate(chunks[:3], 1):
+        src = meta.get("source", meta.get("file", "?"))
+        print(f"   Chunk {i} ({src}): {text[:70]}...")
 
     print("\n=== Done ===")
     return 0

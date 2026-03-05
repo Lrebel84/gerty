@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChatWindow } from './components/ChatWindow'
 import { Sidebar } from './components/Sidebar'
 
@@ -26,9 +26,12 @@ declare global {
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
+  const messagesRef = useRef<Message[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
   const [provider, setProvider] = useState<'local' | 'openrouter'>('local')
+  const [localModel, setLocalModel] = useState('')
+  const [openrouterModel, setOpenrouterModel] = useState('')
 
   useEffect(() => {
     fetch(`${API_BASE}/settings`)
@@ -37,8 +40,67 @@ function App() {
         if (d.provider === 'openrouter' || d.provider === 'local') {
           setProvider(d.provider)
         }
+        setLocalModel(d.local_model || '')
+        setOpenrouterModel(d.openrouter_model || '')
       })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch(`${API_BASE}/chat/history`)
+      .then((r) => r.json())
+      .then((d) => {
+        const msgs = d.messages || []
+        if (msgs.length > 0) {
+          setMessages(msgs.map((m: { id?: string; role?: string; content?: string; timestamp?: string }) => ({
+            id: m.id || crypto.randomUUID(),
+            role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
+            content: m.content || '',
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+          })))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const saveHistory = (msgs: Message[], keepalive = false, skipExtract = false) => {
+    const body = JSON.stringify({
+      messages: msgs.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp?.toISOString?.(),
+      })),
+    })
+    const url = skipExtract ? `${API_BASE}/chat/history?skip_extract=true` : `${API_BASE}/chat/history`
+    fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive,
+    }).catch(() => {})
+  }
+
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  useEffect(() => {
+    const win = window as unknown as {
+      __gertyAddVoiceExchange?: (user: string, assistant: string) => void
+      __gertySetVoiceStatus?: (status: string) => void
+      __gertyGetMessages?: () => Message[]
+      __gertySaveHistory?: () => void
+    }
+    win.__gertyGetMessages = () => messagesRef.current
+    win.__gertySaveHistory = () => saveHistory(messagesRef.current)
+    const onBeforeUnload = () => saveHistory(messagesRef.current, true, true)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => {
+      delete win.__gertyGetMessages
+      delete win.__gertySaveHistory
+      window.removeEventListener('beforeunload', onBeforeUnload)
+    }
   }, [])
 
   useEffect(() => {
@@ -63,6 +125,17 @@ function App() {
       delete win.__gertySetVoiceStatus
     }
   }, [])
+
+  const refetchSettings = () => {
+    fetch(`${API_BASE}/settings`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.provider === 'openrouter' || d.provider === 'local') setProvider(d.provider)
+        setLocalModel(d.local_model || '')
+        setOpenrouterModel(d.openrouter_model || '')
+      })
+      .catch(() => {})
+  }
 
   const handleProviderChange = (p: 'local' | 'openrouter') => {
     setProvider(p)
@@ -104,15 +177,19 @@ function App() {
           message: content,
           history,
           provider: useProvider ?? provider,
+          local_model: localModel || undefined,
+          openrouter_model: openrouterModel || undefined,
         }),
       })
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => 'Request failed')
-        setMessages((m) =>
-          m.map((msg) =>
+        setMessages((m) => {
+          const updated = m.map((msg) =>
             msg.id === assistantId ? { ...msg, content: text || 'Request failed' } : msg
           )
-        )
+          saveHistory(updated)
+          return updated
+        })
         return
       }
 
@@ -129,14 +206,20 @@ function App() {
           )
         )
       }
+      setMessages((m) => {
+        saveHistory(m)
+        return m
+      })
     } catch (e) {
-      setMessages((m) =>
-        m.map((msg) =>
+      setMessages((m) => {
+        const updated = m.map((msg) =>
           msg.id === assistantId
             ? { ...msg, content: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }
             : msg
         )
-      )
+        saveHistory(updated)
+        return updated
+      })
     }
   }
 
@@ -146,11 +229,17 @@ function App() {
         open={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         voiceStatus={voiceStatus}
+        onSettingsSave={refetchSettings}
       />
       <main className={`flex-1 flex flex-col transition-all ${sidebarOpen ? 'ml-64' : 'ml-0'}`}>
         <ChatWindow
           messages={messages}
           onSend={handleSend}
+          localModel={localModel}
+          onNewChat={() => {
+            setMessages([])
+            fetch(`${API_BASE}/chat/history`, { method: 'DELETE' }).catch(() => {})
+          }}
           voiceStatus={voiceStatus}
           provider={provider}
           onProviderChange={handleProviderChange}

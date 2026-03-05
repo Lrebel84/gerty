@@ -55,7 +55,8 @@ def create_bot(router_callback: Callable[[str], str]):
             reply = router_callback(text)
             await update.message.reply_text(reply)
         except Exception as e:
-            await update.message.reply_text(f"Error: {e}")
+            logger.exception("Chat command error")
+            await update.message.reply_text("Something went wrong. Please try again.")
 
     async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.message or not update.message.text:
@@ -70,35 +71,48 @@ def create_bot(router_callback: Callable[[str], str]):
             reply = router_callback(text)
             await update.message.reply_text(reply)
         except Exception as e:
-            await update.message.reply_text(f"Error: {e}")
+            logger.exception("Message handler error")
+            await update.message.reply_text("Something went wrong. Please try again.")
 
     async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_authorized(update.effective_chat.id):
             return
-        reply = router_callback("what time is it")
-        await update.message.reply_text(reply)
+        try:
+            reply = router_callback("what time is it")
+            await update.message.reply_text(reply)
+        except Exception:
+            logger.exception("Time command error")
+            await update.message.reply_text("Something went wrong. Please try again.")
 
     async def cmd_alarm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_authorized(update.effective_chat.id):
             return
         text = update.message.text or ""
         msg = text.replace("/alarm", "").strip() or "list"
-        if msg == "list":
-            reply = router_callback("list my alarms")
-        else:
-            reply = router_callback(f"set alarm for {msg}")
-        await update.message.reply_text(reply)
+        try:
+            if msg == "list":
+                reply = router_callback("list my alarms")
+            else:
+                reply = router_callback(f"set alarm for {msg}")
+            await update.message.reply_text(reply)
+        except Exception:
+            logger.exception("Alarm command error")
+            await update.message.reply_text("Something went wrong. Please try again.")
 
     async def cmd_timer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_authorized(update.effective_chat.id):
             return
         text = update.message.text or ""
         msg = text.replace("/timer", "").strip() or "list"
-        if msg == "list":
-            reply = router_callback("list timers")
-        else:
-            reply = router_callback(f"timer {msg}")
-        await update.message.reply_text(reply)
+        try:
+            if msg == "list":
+                reply = router_callback("list timers")
+            else:
+                reply = router_callback(f"timer {msg}")
+            await update.message.reply_text(reply)
+        except Exception:
+            logger.exception("Timer command error")
+            await update.message.reply_text("Something went wrong. Please try again.")
 
     def run():
         app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

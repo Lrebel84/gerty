@@ -1,5 +1,6 @@
 """Model router: intent classification, tool dispatch, Ollama/OpenRouter selection."""
 
+import logging
 import re
 from typing import Callable, Iterator
 
@@ -11,6 +12,7 @@ from gerty.config import (
 from gerty.llm.ollama_client import OllamaClient
 from gerty.llm.openrouter_client import OpenRouterClient
 
+logger = logging.getLogger(__name__)
 
 # Keywords for intent classification
 TIME_KEYWORDS = ["time", "what time", "current time", "what's the time"]
@@ -23,6 +25,15 @@ TIMER_KEYWORDS = [
     "timer", "set timer", "countdown", "timer for",
     "minute timer", "minute", "second timer",
 ]
+CALC_KEYWORDS = ["calculate", "calculator", "what is", "what's", "compute", "+", "*", "% of"]
+UNIT_KEYWORDS = ["convert", "kilograms to", "miles to", "fahrenheit to", "celsius to"]
+RANDOM_KEYWORDS = ["flip", "coin", "roll", "dice", "random", "pick", "choose"]
+NOTES_KEYWORDS = ["note:", "note ", "notes", "remember", "add note"]
+STOPWATCH_KEYWORDS = ["stopwatch", "how long has", "elapsed"]
+TIMEZONE_KEYWORDS = ["time in", "timezone", "time zone", "what time in"]
+WEATHER_KEYWORDS = ["weather", "forecast", "temperature"]
+SEARCH_KEYWORDS = ["search for", "search ", "look up", "google"]
+POMODORO_KEYWORDS = ["pomodoro"]
 COMPLEX_KEYWORDS = [
     "explain", "write code", "program", "analyze", "compare",
     "summarize", "translate", "complex", "detailed",
@@ -39,15 +50,42 @@ def classify_intent(text: str) -> str:
     for kw in TIMER_KEYWORDS:
         if kw in lower:
             return "timer"
-    for kw in ALARM_KEYWORDS:
+    for kw in TIMEZONE_KEYWORDS:
         if kw in lower:
-            return "alarm"
+            return "timezone"
+    for kw in WEATHER_KEYWORDS:
+        if kw in lower:
+            return "weather"
+    for kw in SEARCH_KEYWORDS:
+        if kw in lower:
+            return "search"
+    for kw in POMODORO_KEYWORDS:
+        if kw in lower:
+            return "pomodoro"
+    for kw in STOPWATCH_KEYWORDS:
+        if kw in lower:
+            return "stopwatch"
     for kw in TIME_KEYWORDS:
         if kw in lower:
             return "time"
     for kw in DATE_KEYWORDS:
         if kw in lower:
             return "date"
+    for kw in CALC_KEYWORDS:
+        if kw in lower or (kw in ("+", "*") and kw in text):
+            return "calculator"
+    for kw in UNIT_KEYWORDS:
+        if kw in lower:
+            return "units"
+    for kw in RANDOM_KEYWORDS:
+        if kw in lower:
+            return "random"
+    for kw in NOTES_KEYWORDS:
+        if kw in lower:
+            return "notes"
+    for kw in ALARM_KEYWORDS:
+        if kw in lower:
+            return "alarm"
     for kw in COMPLEX_KEYWORDS:
         if kw in lower:
             return "complex"
@@ -103,7 +141,8 @@ class Router:
         intent = classify_intent(message)
 
         # Tool intents: delegate to tool executor
-        if intent in ("time", "date", "alarm", "timer") and self._tool_executor:
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "search", "pomodoro")
+        if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
 
         # Complex intent: use reasoning model or OpenRouter
@@ -111,13 +150,13 @@ class Router:
             if OPENROUTER_API_KEY and self.openrouter.is_available():
                 try:
                     return self.openrouter.chat(message, history)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("OpenRouter fallback: %s", e)
             if self.ollama.is_available():
                 try:
                     return self.ollama.chat(message, history, model=OLLAMA_REASONING_MODEL)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Ollama reasoning fallback: %s", e)
 
         # Default: Ollama (chat model for general conversation)
         if self.ollama.is_available():
@@ -147,7 +186,8 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        if intent in ("time", "date", "alarm", "timer") and self._tool_executor:
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "search", "pomodoro")
+        if intent in tool_intents and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result
             return
