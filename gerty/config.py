@@ -102,6 +102,9 @@ RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.9"))
 SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 ALARM_POLL_INTERVAL = int(os.getenv("ALARM_POLL_INTERVAL", "5"))
 
+# Voice: parallel TTS (overlap synthesis/play with LLM stream). Set to 0 to disable.
+VOICE_TTS_PARALLEL = os.getenv("VOICE_TTS_PARALLEL", "1").lower() in ("1", "true", "yes")
+
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))
 VOICE_RESPONSE_TIMEOUT = float(os.getenv("VOICE_RESPONSE_TIMEOUT", "30"))

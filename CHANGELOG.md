@@ -6,6 +6,19 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.11] - 2025-03-06
+
+### Voice – Parallel TTS Playback
+
+Voice playback now overlaps TTS synthesis with LLM streaming, reducing gaps between sentences.
+
+- **Parallel producer–consumer** – Producer thread streams LLM output, extracts sentences, synthesizes TTS, and enqueues audio; playback thread plays while the next sentence is synthesized.
+- **Immediate cancel** – Cancel button stops audio right away via `sd.stop()` (not after the current sentence).
+- **Feature flag** – Set `VOICE_TTS_PARALLEL=0` in `.env` to revert to sequential playback.
+- **Revert tag** – `baseline-before-tts-parallel` for rollback if needed.
+
+---
+
 ## [0.8.10] - 2025-03-06
 
 ### UI

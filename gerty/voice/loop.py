@@ -12,6 +12,7 @@ from gerty.config import (
     VAD_MIN_SILENCE_MS,
     VOSK_MODEL_PATH,
     VOICE_RESPONSE_TIMEOUT,
+    VOICE_TTS_PARALLEL,
 )
 from gerty.settings import load as load_settings
 from gerty.voice.wake_word import (
@@ -82,7 +83,15 @@ def run_voice_loop(
     on_status_change("idle"|"listening"|"processing") called for UI updates.
     """
     try:
-        from gerty.voice.audio import AudioCapture, AudioPlayback
+        from gerty.voice.audio import (
+    AudioCapture,
+    AudioPlayback,
+    drain_play_queue,
+    play_queued,
+    prepare_play_queue,
+    put_play_end,
+    stop_playback,
+)
         from gerty.voice.stt import SpeechToText
         from gerty.voice.tts import TextToSpeech
         from gerty.voice.vad import VADDetector
@@ -212,34 +221,89 @@ def run_voice_loop(
                     played_up_to = 0
                     sentence_end = re.compile(r"([^.!?\n]+[.!?\n]+)")
                     try:
-                        for chunk in stream_router_callback(text):
-                            if consume_voice_cancel():
-                                break
-                            full_reply += chunk
-                            on_assistant_content(full_reply)
-                            remainder = full_reply[played_up_to:]
-                            while True:
-                                m = sentence_end.search(remainder)
-                                if not m:
-                                    break
-                                sentence = m.group(1)
-                                played_up_to += m.end()
+                        if VOICE_TTS_PARALLEL:
+                            prepare_play_queue()
+                            def _producer():
+                                nonlocal full_reply, reply
+                                fp = ""
+                                pp = 0
                                 try:
-                                    audio = tts.synthesize(sentence)
+                                    for chunk in stream_router_callback(text):
+                                        if consume_voice_cancel():
+                                            stop_playback()
+                                            return
+                                        fp += chunk
+                                        on_assistant_content(fp)
+                                        remainder = fp[pp:]
+                                        while True:
+                                            m = sentence_end.search(remainder)
+                                            if not m:
+                                                break
+                                            sentence = m.group(1)
+                                            pp += m.end()
+                                            try:
+                                                audio = tts.synthesize(sentence)
+                                                if audio:
+                                                    play_queued(audio, tts.get_sample_rate())
+                                            except Exception as e:
+                                                logger.debug("TTS chunk failed: %s", e)
+                                            remainder = fp[pp:]
+                                    remainder = fp[pp:]
+                                    if remainder.strip():
+                                        try:
+                                            audio = tts.synthesize(remainder)
+                                            if audio:
+                                                play_queued(audio, tts.get_sample_rate())
+                                        except Exception as e:
+                                            logger.debug("TTS final chunk failed: %s", e)
+                                    full_reply = fp
+                                    reply = fp
+                                except Exception as e:
+                                    logger.warning("Streaming voice failed: %s", e)
+                                    reply = ""
+                                finally:
+                                    put_play_end()
+
+                            prod = threading.Thread(target=_producer)
+                            prod.start()
+                            drain_thread = threading.Thread(target=drain_play_queue)
+                            drain_thread.start()
+                            while drain_thread.is_alive():
+                                if consume_voice_cancel():
+                                    stop_playback()
+                                    break
+                                drain_thread.join(timeout=0.1)
+                            drain_thread.join(timeout=1.0)
+                            prod.join(timeout=2.0)
+                        else:
+                            for chunk in stream_router_callback(text):
+                                if consume_voice_cancel():
+                                    break
+                                full_reply += chunk
+                                on_assistant_content(full_reply)
+                                remainder = full_reply[played_up_to:]
+                                while True:
+                                    m = sentence_end.search(remainder)
+                                    if not m:
+                                        break
+                                    sentence = m.group(1)
+                                    played_up_to += m.end()
+                                    try:
+                                        audio = tts.synthesize(sentence)
+                                        if audio:
+                                            AudioPlayback.play(audio, tts.get_sample_rate())
+                                    except Exception as e:
+                                        logger.debug("TTS chunk failed: %s", e)
+                                    remainder = full_reply[played_up_to:]
+                            remainder = full_reply[played_up_to:]
+                            if remainder.strip():
+                                try:
+                                    audio = tts.synthesize(remainder)
                                     if audio:
                                         AudioPlayback.play(audio, tts.get_sample_rate())
                                 except Exception as e:
-                                    logger.debug("TTS chunk failed: %s", e)
-                                remainder = full_reply[played_up_to:]
-                        remainder = full_reply[played_up_to:]
-                        if remainder.strip():
-                            try:
-                                audio = tts.synthesize(remainder)
-                                if audio:
-                                    AudioPlayback.play(audio, tts.get_sample_rate())
-                            except Exception as e:
-                                logger.debug("TTS final chunk failed: %s", e)
-                        reply = full_reply
+                                    logger.debug("TTS final chunk failed: %s", e)
+                            reply = full_reply
                     except Exception as e:
                         logger.warning("Streaming voice failed: %s", e)
                         reply = ""
