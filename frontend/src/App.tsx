@@ -202,20 +202,19 @@ function App() {
     }
     setMessages((m) => [...m, assistantMsg])
 
-    try {
-      const history = messages
-        .slice(-10)
-        .map((m) => ({ role: m.role, content: m.content }))
+    const requestBody = {
+      message: content,
+      history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
+      provider: useProvider ?? provider,
+      local_model: localModel || undefined,
+      openrouter_model: openrouterModel || undefined,
+    }
+
+    const tryStream = async (): Promise<boolean> => {
       const res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: content,
-          history,
-          provider: useProvider ?? provider,
-          local_model: localModel || undefined,
-          openrouter_model: openrouterModel || undefined,
-        }),
+        body: JSON.stringify(requestBody),
       })
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => 'Request failed')
@@ -226,9 +225,8 @@ function App() {
           saveHistory(updated)
           return updated
         })
-        return
+        return true
       }
-
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let acc = ''
@@ -237,25 +235,52 @@ function App() {
         if (done) break
         acc += decoder.decode(value, { stream: true })
         setMessages((m) =>
-          m.map((msg) =>
-            msg.id === assistantId ? { ...msg, content: acc } : msg
-          )
+          m.map((msg) => (msg.id === assistantId ? { ...msg, content: acc } : msg))
         )
       }
       setMessages((m) => {
         saveHistory(m)
         return m
       })
-    } catch (e) {
+      return true
+    }
+
+    const tryNonStreaming = async (): Promise<void> => {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+      const data = await res.json().catch(() => ({}))
+      const reply = data.reply ?? data.error ?? 'Request failed'
       setMessages((m) => {
         const updated = m.map((msg) =>
-          msg.id === assistantId
-            ? { ...msg, content: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` }
-            : msg
+          msg.id === assistantId ? { ...msg, content: reply } : msg
         )
         saveHistory(updated)
         return updated
       })
+    }
+
+    try {
+      await tryStream()
+    } catch (e) {
+      try {
+        await tryNonStreaming()
+      } catch (fallbackErr) {
+        setMessages((m) => {
+          const updated = m.map((msg) =>
+            msg.id === assistantId
+              ? {
+                  ...msg,
+                  content: `Error: ${e instanceof Error ? e.message : 'Unknown error'} (stream failed; non-streaming fallback also failed)`,
+                }
+              : msg
+          )
+          saveHistory(updated)
+          return updated
+        })
+      }
     }
   }
 

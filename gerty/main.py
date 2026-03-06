@@ -224,7 +224,7 @@ def main():
 
     # No on_closing handler - it blocked the window (evaluate_js + httpx can hang).
     # Chat is already saved after each message and on beforeunload.
-    webview.start(debug=False, gui="qt", icon=icon_path)
+    webview.start(debug=True, gui="qt", icon=icon_path)
 
 
 if __name__ == "__main__":

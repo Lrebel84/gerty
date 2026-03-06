@@ -2,6 +2,39 @@
 
 All notable changes to the Gerty project are documented in this file.
 
+## [Unreleased] - Regressions
+
+### Known Regressions (Caused by AI Assistant Changes)
+
+**Text chat broken: "Error: network error"** – Both local and OpenRouter models fail. The browser fetch to `POST /api/chat/stream` fails before any response. Chat was working before these changes.
+
+**What was changed (attempted fixes that reverted or broke things):**
+
+1. **Voice loop / mic stop button** – User reported STT=auto + OpenRouter caused mic stop button to stop working. Attempted fixes:
+   - Reduced `CAPTURE_READ_TIMEOUT_SEC` from 0.15 to 0.05 (then reverted to 0.15)
+   - Added `get_stt()` dynamic STT loading (reverted)
+   - Added check at top of loop for stop before blocking (reverted)
+   - Added HTTP `GET /api/voice/status` and `set_voice_status` in wake_word.py (reverted)
+   - Added frontend polling for voice status (reverted)
+   - Added `get_history` and `history` param to stream/sync callbacks (reverted)
+   - All voice changes reverted via `git checkout -- gerty/voice/loop.py gerty/voice/wake_word.py gerty/main.py gerty/ui/server.py frontend/src/components/ChatWindow.tsx`
+
+2. **Vite proxy** – Added `server.proxy` config for `/api` → `http://127.0.0.1:8765` (reverted). Unnecessary; user runs built app.
+
+3. **audio.py** – Added `play_queue` method for playback (reverted via `git checkout`).
+
+**Current state:** All changes reverted. Codebase matches commit f11b13a (v0.8.5). Chat still fails with "network error" despite clean revert.
+
+**Likely cause of "network error":** The fetch from the browser (PyWebView) to the local server fails. Possible causes:
+- PyWebView/Qt WebEngine blocking or restricting fetch to same-origin
+- Server not binding or responding correctly when launched from desktop
+- CORS or connection issue when app loads from `http://127.0.0.1:8765`
+- Streaming response (`StreamingResponse`) failing before first byte sent
+
+**To debug:** Check gerty.log when sending a message. Check browser Network tab. Verify `http://127.0.0.1:8765/api/health` returns OK when app is running.
+
+---
+
 ## [0.1.0] - 2025-03-04
 
 Initial implementation of Gerty, a local Jarvis/Alexa-style voice assistant.

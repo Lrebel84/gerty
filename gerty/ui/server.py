@@ -315,6 +315,7 @@ def create_app(router):
     async def chat_stream(body: dict = Body(default_factory=dict)):
         message = body.get("message", "")
         history = body.get("history", [])
+        logger.info("Chat stream request: message=%r", message[:50] if message else "")
         if not message:
             return {"error": "Empty message"}
         settings = load_settings()
@@ -347,6 +348,7 @@ def create_app(router):
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
             async def stream():
+                yield "\u200b"  # Zero-width space: immediate byte so client gets response (avoids WebEngine timeout)
                 loop.run_in_executor(None, produce)
                 while True:
                     chunk = await queue.get()
