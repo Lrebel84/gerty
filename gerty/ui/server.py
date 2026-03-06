@@ -34,7 +34,7 @@ from gerty.rag import (
 from gerty.settings import load as load_settings, save as save_settings
 from gerty.tools.alarms import get_pending_alarms, cancel_all_alarms
 from gerty.tools.timers import get_active_timers, cancel_all_timers
-from gerty.voice.wake_word import request_ptt_recording, stop_ptt_recording
+from gerty.voice.wake_word import request_ptt_recording, request_voice_cancel, stop_ptt_recording
 
 # Project paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -370,13 +370,21 @@ def create_app(router):
     @app.post("/api/voice/start")
     async def voice_start():
         """Start voice recording (HTTP fallback when pywebview bridge unavailable)."""
+        logger.info("Voice: start received")
         request_ptt_recording()
         return {"ok": True}
 
     @app.post("/api/voice/stop")
     async def voice_stop():
         """Stop voice recording (HTTP fallback when pywebview bridge unavailable)."""
+        logger.info("Voice: stop received")
         stop_ptt_recording()
+        return {"ok": True}
+
+    @app.post("/api/voice/cancel")
+    async def voice_cancel():
+        """Cancel current voice processing (STT/LLM/TTS). Unsticks 'Processing' state."""
+        request_voice_cancel()
         return {"ok": True}
 
     @app.get("/api/health")

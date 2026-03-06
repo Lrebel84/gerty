@@ -9,6 +9,7 @@ from gerty.config import PICOVOICE_ACCESS_KEY
 # Thread-safe flags for push-to-talk (when no wake word available)
 _ptt_requested = threading.Event()
 _ptt_stop_requested = threading.Event()
+_voice_cancel_requested = threading.Event()
 
 
 def request_ptt_recording():
@@ -39,6 +40,24 @@ def is_ptt_stop_requested() -> bool:
 def clear_ptt_stop():
     """Clear the stop flag after processing."""
     _ptt_stop_requested.clear()
+
+
+def request_voice_cancel():
+    """Signal voice loop to cancel current processing (STT/LLM/TTS)."""
+    _voice_cancel_requested.set()
+
+
+def consume_voice_cancel() -> bool:
+    """Check and consume a voice cancel request. Returns True if cancel was requested."""
+    if _voice_cancel_requested.is_set():
+        _voice_cancel_requested.clear()
+        return True
+    return False
+
+
+def clear_voice_cancel():
+    """Clear cancel flag (e.g. when starting new recording)."""
+    _voice_cancel_requested.clear()
 
 
 class WakeWordDetector:

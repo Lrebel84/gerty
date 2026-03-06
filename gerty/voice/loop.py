@@ -17,8 +17,10 @@ from gerty.settings import load as load_settings
 from gerty.voice.wake_word import (
     create_wake_detector,
     consume_ptt_request,
-    is_ptt_stop_requested,
+    consume_voice_cancel,
     clear_ptt_stop,
+    clear_voice_cancel,
+    is_ptt_stop_requested,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,10 +35,12 @@ MIN_SPEECH_CHUNKS = 16
 # Minimum chunks before processing (ensure enough audio for useful transcription)
 # ~1s = 32 chunks
 MIN_RECORDING_CHUNKS = 32
-# STT timeout (Moonshine first run ~30–60s on CPU; faster-whisper can hang in PyWebView; fallback to Vosk on timeout)
-STT_TIMEOUT_SEC = 60
+# STT timeout (faster-whisper can hang in PyWebView; fallback to Vosk on timeout; 25s = fail faster)
+STT_TIMEOUT_SEC = 25
 # Read timeout: must exceed block duration (1280 samples @ 16kHz = 80ms) to get audio
 CAPTURE_READ_TIMEOUT_SEC = 0.15
+# Max recording: force process after this many seconds (prevents infinite recording if VAD never triggers)
+MAX_RECORDING_SEC = 30
 
 
 def _stt_available() -> bool:
@@ -132,6 +136,7 @@ def run_voice_loop(
 
     recording = False
     audio_chunks = []
+    recording_started_at: float | None = None
     capture.start()
 
     def _status(s: str):
@@ -142,21 +147,26 @@ def run_voice_loop(
                 logger.debug("Voice status callback failed: %s", e)
 
     def on_wake():
-        nonlocal recording, audio_chunks
+        nonlocal recording, audio_chunks, recording_started_at
+        clear_voice_cancel()  # Clear any stale cancel from previous run
         recording = True
         audio_chunks = []
+        recording_started_at = time.perf_counter()
         _status("listening")
         if vad:
             vad.reset()
 
     def process_recording():
-        nonlocal recording, audio_chunks
+        nonlocal recording, audio_chunks, recording_started_at
         if not audio_chunks or len(audio_chunks) < MIN_RECORDING_CHUNKS:
             _status("idle")
             recording = False
             audio_chunks = []
+            recording_started_at = None
             return
         _status("processing")
+        if consume_voice_cancel():
+            return
         try:
             t0 = time.perf_counter()
             text = ""
@@ -185,6 +195,9 @@ def run_voice_loop(
                         stt_to_use = SpeechToText(backend="vosk")
             t_stt = time.perf_counter() - t0
             logger.info("Voice: STT %.2fs | %r", t_stt, (text[:60] + "..." if text and len(text) > 60 else text))
+            if consume_voice_cancel():
+                logger.info("Voice: cancelled after STT")
+                return
             if text:
                 if on_user_text:
                     try:
@@ -200,6 +213,8 @@ def run_voice_loop(
                     sentence_end = re.compile(r"([^.!?\n]+[.!?\n]+)")
                     try:
                         for chunk in stream_router_callback(text):
+                            if consume_voice_cancel():
+                                break
                             full_reply += chunk
                             on_assistant_content(full_reply)
                             remainder = full_reply[played_up_to:]
@@ -263,6 +278,7 @@ def run_voice_loop(
             _status("idle")
             recording = False
             audio_chunks = []
+            recording_started_at = None
 
     def check_energy_fallback() -> bool:
         """Energy-based fallback when Silero VAD unavailable."""
@@ -271,10 +287,11 @@ def run_voice_loop(
         if len(audio_chunks) < MIN_SPEECH_CHUNKS:
             return False
         # Use VAD_MIN_SILENCE_MS; chunk duration = frame_length/sample_rate
+        # max(5,...) = min 5 chunks to avoid false triggers; was max(20,...) which forced ~1.6s with OpenWakeWord
         ms_per_chunk = 1000 * frame_length / sample_rate
-        SILENCE_THRESHOLD = max(20, int(VAD_MIN_SILENCE_MS / ms_per_chunk))
-        # 1200 tolerates ambient room noise (was 800; higher = stop sooner with background sound)
-        SILENCE_ENERGY = 1200
+        SILENCE_THRESHOLD = max(5, int(VAD_MIN_SILENCE_MS / ms_per_chunk))
+        # 800 = more sensitive; 1200 was too high for some environments (never stopped)
+        SILENCE_ENERGY = 800
         silence_frames = 0
         for chunk in audio_chunks[-SILENCE_THRESHOLD:]:
             arr = np.frombuffer(chunk, dtype=np.int16)
@@ -324,6 +341,10 @@ def run_voice_loop(
                         logger.debug("VAD chunk failed: %s", vad_err)
                 if not end_detected:
                     end_detected = check_energy_fallback()
+                # Force process after MAX_RECORDING_SEC (VAD may never trigger in noisy environments)
+                if recording_started_at and (time.perf_counter() - recording_started_at) >= MAX_RECORDING_SEC:
+                    end_detected = True
+                    logger.info("Voice: max recording duration reached, forcing process")
                 if end_detected and len(audio_chunks) >= max(MIN_SPEECH_CHUNKS, MIN_RECORDING_CHUNKS):
                     process_recording()
         except Exception as e:

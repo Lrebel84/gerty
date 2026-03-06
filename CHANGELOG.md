@@ -2,36 +2,48 @@
 
 All notable changes to the Gerty project are documented in this file.
 
-## [Unreleased] - Regressions
+## [0.8.7] - 2025-03-06
 
-### Known Regressions (Caused by AI Assistant Changes)
+### Mic Button & Voice Processing Fixes
 
-**Text chat broken: "Error: network error"** – Both local and OpenRouter models fail. The browser fetch to `POST /api/chat/stream` fails before any response. Chat was working before these changes.
+#### Mic doesn't auto-stop
+- **Energy fallback**: Reduced `SILENCE_THRESHOLD` from `max(20, ...)` to `max(5, ...)` so VAD_MIN_SILENCE_MS (700ms) is respected. Previously forced ~1.6s of silence with OpenWakeWord frame size.
 
-**What was changed (attempted fixes that reverted or broke things):**
+#### Stuck on "Processing"
+- **Voice cancel**: Added `POST /api/voice/cancel` and Cancel button now signals backend to abort. `process_recording` checks for cancel after STT and during LLM streaming.
+- **STT timeout**: Reduced from 60s to 25s for faster Vosk fallback when faster-whisper/Groq hangs.
 
-1. **Voice loop / mic stop button** – User reported STT=auto + OpenRouter caused mic stop button to stop working. Attempted fixes:
-   - Reduced `CAPTURE_READ_TIMEOUT_SEC` from 0.15 to 0.05 (then reverted to 0.15)
-   - Added `get_stt()` dynamic STT loading (reverted)
-   - Added check at top of loop for stop before blocking (reverted)
-   - Added HTTP `GET /api/voice/status` and `set_voice_status` in wake_word.py (reverted)
-   - Added frontend polling for voice status (reverted)
-   - Added `get_history` and `history` param to stream/sync callbacks (reverted)
-   - All voice changes reverted via `git checkout -- gerty/voice/loop.py gerty/voice/wake_word.py gerty/main.py gerty/ui/server.py frontend/src/components/ChatWindow.tsx`
+#### Reliability
+- **Voice API retries**: `start`, `stop`, and `cancel` now retry up to 3 times with 100ms delay if fetch fails (Qt WebEngine can drop requests).
 
-2. **Vite proxy** – Added `server.proxy` config for `/api` → `http://127.0.0.1:8765` (reverted). Unnecessary; user runs built app.
+---
 
-3. **audio.py** – Added `play_queue` method for playback (reverted via `git checkout`).
+## [0.8.6] - 2025-03-06
 
-**Current state:** All changes reverted. Codebase matches commit f11b13a (v0.8.5). Chat still fails with "network error" despite clean revert.
+### Chat Restored (Network Error Fix)
 
-**Likely cause of "network error":** The fetch from the browser (PyWebView) to the local server fails. Possible causes:
-- PyWebView/Qt WebEngine blocking or restricting fetch to same-origin
-- Server not binding or responding correctly when launched from desktop
-- CORS or connection issue when app loads from `http://127.0.0.1:8765`
-- Streaming response (`StreamingResponse`) failing before first byte sent
+Text chat was broken with "Error: network error" after attempted OpenRouter/Groq STT changes. This release restores working chat.
 
-**To debug:** Check gerty.log when sending a message. Check browser Network tab. Verify `http://127.0.0.1:8765/api/health` returns OK when app is running.
+#### Changes
+
+- **Non-streaming fallback** – When `POST /api/chat/stream` fails (e.g. Qt WebEngine fetch restriction), the frontend automatically falls back to `POST /api/chat` and displays the full reply.
+- **Immediate first-byte** – The stream endpoint now yields a zero-width space before the first LLM token so the client receives a response immediately, avoiding WebEngine timeout.
+- **Request logging** – `chat_stream` logs each request to `gerty.log` for debugging.
+- **PyWebView debug mode** – DevTools enabled (`debug=True`) to inspect Network tab when issues occur.
+
+#### Revert to This Working Version
+
+A baseline tag was created for easy rollback:
+
+```bash
+# Reset to working baseline (discards any later changes)
+git reset --hard baseline-working
+
+# Or checkout specific files only
+git checkout baseline-working -- frontend/src/App.tsx gerty/ui/server.py gerty/main.py
+```
+
+Tag `baseline-working` points to this commit. After reverting, rebuild the frontend: `cd frontend && npm run build && cd ..`
 
 ---
 
