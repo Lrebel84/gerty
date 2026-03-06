@@ -56,11 +56,13 @@ TELEGRAM_CHAT_IDS = _parse_telegram_chat_ids()
 # Porcupine wake word
 PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
 
-# Speech-to-text backend: faster_whisper, vosk, groq, or auto (Groq when WiFi, else local)
+# Speech-to-text backend: faster_whisper, moonshine, vosk, groq, or auto (Groq when WiFi, else local)
 STT_BACKEND = os.getenv("STT_BACKEND", "faster_whisper")
 # tiny=fastest for voice on CPU; base=balanced; small/medium/large-v3=better accuracy, slower
 FASTER_WHISPER_MODEL = os.getenv("FASTER_WHISPER_MODEL", "base")
 FASTER_WHISPER_DEVICE = os.getenv("FASTER_WHISPER_DEVICE", "cpu")  # cpu or cuda
+# Moonshine: UsefulSensors variable-length STT, ~5x faster than Whisper on short commands. tiny (27M) or base (61M)
+MOONSHINE_MODEL = os.getenv("MOONSHINE_MODEL", "base")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # VAD (Silero) / energy fallback: min silence before end-of-speech (ms)

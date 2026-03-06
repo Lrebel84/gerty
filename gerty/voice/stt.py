@@ -1,4 +1,4 @@
-"""Speech-to-text: Vosk, faster-whisper, or Groq."""
+"""Speech-to-text: Vosk, faster-whisper, Moonshine, or Groq."""
 
 import io
 import json
@@ -6,10 +6,13 @@ import logging
 import tempfile
 from pathlib import Path
 
+import numpy as np
+
 from gerty.config import (
     FASTER_WHISPER_DEVICE,
     FASTER_WHISPER_MODEL,
     GROQ_API_KEY,
+    MOONSHINE_MODEL,
     STT_BACKEND,
     VOSK_MODEL_PATH,
 )
@@ -138,6 +141,64 @@ class FasterWhisperSTT:
             return False
 
 
+class MoonshineSTT:
+    """Moonshine STT (Useful Sensors): variable-length processing, ~5x faster than Whisper on short commands."""
+
+    def __init__(self, model: str = MOONSHINE_MODEL):
+        self.model_id = f"UsefulSensors/moonshine-{model}" if model in ("tiny", "base") else "UsefulSensors/moonshine-base"
+        self._model = None
+        self._processor = None
+
+    def _ensure_loaded(self):
+        if self._model is not None:
+            return
+        try:
+            import torch
+            from transformers import AutoProcessor, MoonshineForConditionalGeneration
+
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            self._processor = AutoProcessor.from_pretrained(self.model_id)
+            self._model = (
+                MoonshineForConditionalGeneration.from_pretrained(self.model_id)
+                .to(device)
+                .to(dtype)
+            )
+        except ImportError as e:
+            raise ImportError(
+                "Moonshine requires transformers and torch. Run: pip install 'transformers[torch]'"
+            ) from e
+
+    def transcribe_stream(
+        self, audio_chunks: list[bytes], sample_rate: int = 16000
+    ) -> str:
+        """Transcribe audio chunks. Returns final text."""
+        self._ensure_loaded()
+        if not audio_chunks:
+            return ""
+        pcm = b"".join(audio_chunks)
+        arr = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        inputs = self._processor(
+            arr, sampling_rate=sample_rate, return_tensors="pt"
+        )
+        inputs = inputs.to(self._model.device, dtype=self._model.dtype)
+        # Limit max_length to prevent hallucination loops (6.5 tokens/sec, Moonshine model card)
+        audio_seconds = len(arr) / sample_rate
+        max_length = max(20, int(6.5 * audio_seconds))
+        predicted_ids = self._model.generate(**inputs, max_length=max_length)
+        text = self._processor.batch_decode(
+            predicted_ids, skip_special_tokens=True
+        )
+        return (text[0] if text else "").strip()
+
+    def is_available(self) -> bool:
+        try:
+            self._ensure_loaded()
+            return True
+        except Exception:
+            return False
+
+
 class GroqSTT:
     """Groq Whisper API (cloud, 216x real-time)."""
 
@@ -195,12 +256,14 @@ def _network_available() -> bool:
 def _create_stt_backend(
     backend: str | None = None,
     faster_whisper_model: str | None = None,
+    moonshine_model: str | None = None,
 ):
     """Create STT backend based on config or overrides from settings.
-    Tries preferred backend first, then fallbacks (vosk, groq) if it fails.
+    Tries preferred backend first, then fallbacks (moonshine, faster_whisper, vosk, groq) if it fails.
     'auto': use Groq when GROQ_API_KEY and network available; else faster_whisper then vosk."""
     backend = (backend or STT_BACKEND or "").strip().lower()
-    model = (faster_whisper_model or FASTER_WHISPER_MODEL or "base").strip()
+    fw_model = (faster_whisper_model or FASTER_WHISPER_MODEL or "base").strip()
+    ms_model = (moonshine_model or MOONSHINE_MODEL or "base").strip()
     if backend == "auto":
         if GROQ_API_KEY and _network_available():
             try:
@@ -209,7 +272,8 @@ def _create_stt_backend(
                 logger.debug("Auto: Groq failed, falling back to local: %s", e)
         backend = "faster_whisper"
     order = [backend] if backend else []
-    # Add fallbacks: prefer faster_whisper then vosk (offline), then groq
+    if "moonshine" not in order:
+        order.append("moonshine")
     if "faster_whisper" not in order:
         order.append("faster_whisper")
     if "vosk" not in order and VOSK_MODEL_PATH.exists():
@@ -222,9 +286,16 @@ def _create_stt_backend(
                 return GroqSTT()
             except Exception as e:
                 logger.debug("Groq STT failed: %s", e)
+        elif b == "moonshine":
+            try:
+                stt = MoonshineSTT(model=ms_model)
+                if stt.is_available():
+                    return stt
+            except Exception as e:
+                logger.debug("Moonshine STT not available: %s", e)
         elif b == "faster_whisper":
             try:
-                stt = FasterWhisperSTT(model_size=model)
+                stt = FasterWhisperSTT(model_size=fw_model)
                 if stt.is_available():
                     return stt
             except Exception as e:
@@ -236,30 +307,34 @@ def _create_stt_backend(
                 logger.debug("Vosk STT failed: %s", e)
     raise RuntimeError(
         "No STT backend available. Set STT_BACKEND=faster_whisper (pip install faster-whisper), "
-        "STT_BACKEND=vosk with VOSK_MODEL_PATH, STT_BACKEND=groq with GROQ_API_KEY, or STT_BACKEND=auto."
+        "STT_BACKEND=moonshine (pip install 'transformers[torch]'), STT_BACKEND=vosk with VOSK_MODEL_PATH, "
+        "STT_BACKEND=groq with GROQ_API_KEY, or STT_BACKEND=auto."
     )
 
 
 class SpeechToText:
     """
     Facade that selects STT backend from config or settings.
-    Supports: vosk, faster_whisper, groq.
+    Supports: vosk, faster_whisper, moonshine, groq.
     """
 
     def __init__(
         self,
         backend: str | None = None,
         faster_whisper_model: str | None = None,
+        moonshine_model: str | None = None,
     ):
         self._backend = None
         self._backend_override = backend
-        self._model_override = faster_whisper_model
+        self._fw_model_override = faster_whisper_model
+        self._moonshine_model_override = moonshine_model
 
     def _get_backend(self):
         if self._backend is None:
             self._backend = _create_stt_backend(
                 backend=self._backend_override,
-                faster_whisper_model=self._model_override,
+                faster_whisper_model=self._fw_model_override,
+                moonshine_model=self._moonshine_model_override,
             )
         return self._backend
 
@@ -290,6 +365,14 @@ class SpeechToText:
                         break
                     chunks.append(d)
                 return backend.transcribe_stream(chunks, rate)
+        if isinstance(backend, MoonshineSTT):
+            import wave
+            with wave.open(str(path), "rb") as wf:
+                if wf.getnchannels() != 1 or wf.getsampwidth() != 2:
+                    raise ValueError("Audio must be 16-bit mono")
+                rate = wf.getframerate()
+                pcm = wf.readframes(wf.getnframes())
+            return backend.transcribe_stream([pcm], rate)
         # faster-whisper and Groq accept file path
         if isinstance(backend, FasterWhisperSTT):
             backend._ensure_loaded()

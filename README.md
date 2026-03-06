@@ -84,7 +84,7 @@ Drop PDF, Excel, Word, or text files into `data/knowledge/`, then open Settings 
 
 Voice is **fully local** by default – no API keys required:
 - **Single-click mic**: Click once to speak; auto-stops when you finish (or click again to stop early). Uses Silero VAD for end-of-speech detection.
-- **STT (speech-to-text)**: faster-whisper (default), Vosk (legacy), Groq (cloud, 216x real-time), or Auto (Groq when WiFi, else local). For voice on CPU: use `tiny` or Groq. Settings → Voice – Speech recognition.
+- **STT (speech-to-text)**: faster-whisper (default), **Moonshine** (variable-length, ~5x faster on short commands), Vosk (legacy), Groq (cloud, 216x real-time), or Auto. Moonshine: `pip install "transformers[torch]"`, then Settings → Voice – Speech recognition → Moonshine. For CPU: use `tiny` or Groq.
 - **Vosk fallback**: If faster-whisper hangs (e.g. under PyWebView), voice automatically falls back to Vosk.
 - **TTS (text-to-speech)**: Piper (fast) or Kokoro-82M (ElevenLabs-like) – Settings → Voice – Text-to-speech. Choose a voice and click **Save** to set it as default.
 - **Wake word** (optional): Install `pip install openwakeword` for "hey jarvis", or set `PICOVOICE_ACCESS_KEY` for "computer"

@@ -391,6 +391,25 @@ RAG and memory injection removed from pipeline; voice path optimized for low lat
 
 ---
 
+## [0.8.4] - 2025-03-05
+
+### Moonshine STT (The "Kokoro of STT")
+
+#### Added
+- **Moonshine STT** – Optional STT backend from Useful Sensors. Variable-length processing: only computes the exact length of your audio (no 30s Whisper chunks). ~5x faster than Whisper on short voice commands.
+- **Models** – `tiny` (27M params) or `base` (61M params). English accuracy beats Whisper's smaller models.
+- **Settings** – STT backend dropdown: Moonshine; model selector (tiny/base).
+- **Config** – `STT_BACKEND=moonshine`, `MOONSHINE_MODEL=base` in `.env`.
+
+#### Dependencies
+- `transformers[torch]>=5.3.0` – Required for Moonshine. Models download from Hugging Face on first use.
+
+#### Documentation
+- **README** – Moonshine STT option, install note.
+- **.env.example** – Moonshine config comments.
+
+---
+
 ## [0.8.3] - 2025-03-05
 
 ### Kokoro TTS Fixes & Docs
@@ -401,6 +420,27 @@ RAG and memory injection removed from pipeline; voice path optimized for low lat
 #### Documentation
 - **README** – Voice selection: choose voice in Settings and click Save to set as default. Kokoro install note for venv/desktop launcher.
 - **CHANGELOG** – This entry.
+
+---
+
+## [0.8.5] - 2025-03-05
+
+### Voice UX: Immediate Feedback & Streaming TTS
+
+#### Added
+- **Immediate STT display** – Your transcribed speech appears in the chat as soon as STT completes, before the assistant replies. Confirms what was heard.
+- **Streaming TTS** – Assistant starts speaking as soon as the first sentence is ready. No longer waits for the full reply block.
+- **Streaming assistant text** – Assistant message updates in the chat as the LLM streams tokens.
+- **New callbacks** – `on_user_text`, `on_assistant_content`, `stream_router_callback` for phased voice updates.
+
+#### Changed
+- **Voice loop** – Uses `chat_pipeline_stream` for voice; plays TTS sentence-by-sentence (on `.` `!` `?` `\n`).
+- **Frontend** – `__gertyAddVoiceUserMessage`, `__gertySetVoiceAssistantContent` for immediate user display and streaming assistant.
+- **Moonshine STT** – Switched to model-specific API with `max_length` to prevent hallucination loops; increased timeout to 60s.
+- **Settings** – STT tip: faster-whisper (tiny/base) recommended for lowest latency.
+
+#### Fixed
+- **Moonshine hanging** – Model-specific `MoonshineForConditionalGeneration` + `AutoProcessor` with token limit prevents infinite generation.
 
 ---
 

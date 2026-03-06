@@ -33,20 +33,25 @@ MIN_SPEECH_CHUNKS = 16
 # Minimum chunks before processing (ensure enough audio for useful transcription)
 # ~1s = 32 chunks
 MIN_RECORDING_CHUNKS = 32
-# STT timeout (faster-whisper can hang in PyWebView; fallback to Vosk on timeout)
-STT_TIMEOUT_SEC = 20
+# STT timeout (Moonshine first run ~30–60s on CPU; faster-whisper can hang in PyWebView; fallback to Vosk on timeout)
+STT_TIMEOUT_SEC = 60
 # Read timeout: must exceed block duration (1280 samples @ 16kHz = 80ms) to get audio
 CAPTURE_READ_TIMEOUT_SEC = 0.15
 
 
 def _stt_available() -> bool:
-    """Check if any STT backend is available (Vosk, faster-whisper, or Groq)."""
+    """Check if any STT backend is available (Vosk, faster-whisper, Moonshine, or Groq)."""
     if VOSK_MODEL_PATH.exists():
         return True
     if GROQ_API_KEY:
         return True
     try:
         import faster_whisper  # noqa: F401
+        return True
+    except ImportError:
+        pass
+    try:
+        import transformers  # noqa: F401
         return True
     except ImportError:
         pass
@@ -57,12 +62,19 @@ def run_voice_loop(
     router_callback,
     on_exchange=None,
     on_status_change=None,
+    *,
+    on_user_text=None,
+    on_assistant_content=None,
+    stream_router_callback=None,
 ):
     """
     Run voice loop in current thread. Blocks.
     Works with: Porcupine (if PICOVOICE_ACCESS_KEY), OpenWakeWord (local), or push-to-talk only.
     Single-click: VAD auto-detects end of speech; manual click optional to stop early.
-    on_exchange(user_msg, assistant_msg) called when we have a full exchange.
+    on_exchange(user_msg, assistant_msg) called when we have a full exchange (legacy).
+    on_user_text(text) called when STT completes – show user message immediately.
+    on_assistant_content(content) called as LLM streams – update assistant message.
+    stream_router_callback(msg) yields chunks; if provided, enables streaming TTS (sentence-by-sentence).
     on_status_change("idle"|"listening"|"processing") called for UI updates.
     """
     try:
@@ -95,11 +107,16 @@ def run_voice_loop(
     settings = load_settings()
     backend = settings.get("stt_backend") or STT_BACKEND or "faster_whisper"
     faster_whisper_model = settings.get("faster_whisper_model")
-    stt = SpeechToText(backend=backend, faster_whisper_model=faster_whisper_model)
+    moonshine_model = settings.get("moonshine_model")
+    stt = SpeechToText(
+        backend=backend,
+        faster_whisper_model=faster_whisper_model,
+        moonshine_model=moonshine_model,
+    )
     logger.info(
-        "Voice: STT=%s, faster_whisper_model=%s, local_model=%s",
+        "Voice: STT=%s, model=%s, local_model=%s",
         backend,
-        faster_whisper_model or "default",
+        (moonshine_model if backend == "moonshine" else faster_whisper_model) or "default",
         settings.get("local_model") or "(default)",
     )
     tts = TextToSpeech()
@@ -169,26 +186,67 @@ def run_voice_loop(
             t_stt = time.perf_counter() - t0
             logger.info("Voice: STT %.2fs | %r", t_stt, (text[:60] + "..." if text and len(text) > 60 else text))
             if text:
-                t1 = time.perf_counter()
-                with ThreadPoolExecutor(max_workers=1) as ex:
-                    future = ex.submit(router_callback, text)
+                if on_user_text:
                     try:
-                        reply = future.result(timeout=VOICE_RESPONSE_TIMEOUT)
-                    except FuturesTimeoutError:
-                        reply = "That took too long. Please try again or ask something simpler."
-                        logger.warning("Voice response timed out after %ds", VOICE_RESPONSE_TIMEOUT)
+                        on_user_text(text)
+                    except Exception as e:
+                        logger.debug("on_user_text failed: %s", e)
+                t1 = time.perf_counter()
+                reply = ""
+                if stream_router_callback and on_assistant_content:
+                    import re
+                    full_reply = ""
+                    played_up_to = 0
+                    sentence_end = re.compile(r"([^.!?\n]+[.!?\n]+)")
+                    try:
+                        for chunk in stream_router_callback(text):
+                            full_reply += chunk
+                            on_assistant_content(full_reply)
+                            remainder = full_reply[played_up_to:]
+                            while True:
+                                m = sentence_end.search(remainder)
+                                if not m:
+                                    break
+                                sentence = m.group(1)
+                                played_up_to += m.end()
+                                try:
+                                    audio = tts.synthesize(sentence)
+                                    if audio:
+                                        AudioPlayback.play(audio, tts.get_sample_rate())
+                                except Exception as e:
+                                    logger.debug("TTS chunk failed: %s", e)
+                                remainder = full_reply[played_up_to:]
+                        remainder = full_reply[played_up_to:]
+                        if remainder.strip():
+                            try:
+                                audio = tts.synthesize(remainder)
+                                if audio:
+                                    AudioPlayback.play(audio, tts.get_sample_rate())
+                            except Exception as e:
+                                logger.debug("TTS final chunk failed: %s", e)
+                        reply = full_reply
+                    except Exception as e:
+                        logger.warning("Streaming voice failed: %s", e)
+                        reply = ""
+                if not reply:
+                    with ThreadPoolExecutor(max_workers=1) as ex:
+                        future = ex.submit(router_callback, text)
+                        try:
+                            reply = future.result(timeout=VOICE_RESPONSE_TIMEOUT)
+                        except FuturesTimeoutError:
+                            reply = "That took too long. Please try again or ask something simpler."
+                            logger.warning("Voice response timed out after %ds", VOICE_RESPONSE_TIMEOUT)
+                    if on_assistant_content:
+                        on_assistant_content(reply)
+                    try:
+                        audio = tts.synthesize(reply)
+                        AudioPlayback.play(audio, tts.get_sample_rate())
+                    except Exception as e:
+                        logger.debug("TTS playback failed: %s", e)
                 t_llm = time.perf_counter() - t1
                 logger.info("Voice: LLM %.2fs | reply %d chars", t_llm, len(reply))
-                if on_exchange:
+                if on_exchange and not (stream_router_callback and on_assistant_content):
                     on_exchange(text, reply)
-                try:
-                    t2 = time.perf_counter()
-                    audio = tts.synthesize(reply)
-                    AudioPlayback.play(audio, tts.get_sample_rate())
-                    t_tts = time.perf_counter() - t2
-                    logger.info("Voice: TTS %.2fs | total %.2fs", t_tts, time.perf_counter() - t0)
-                except Exception as e:
-                    logger.debug("TTS playback failed: %s", e)
             else:
                 # Empty transcription - give user feedback
                 fallback = "I didn't catch that. Try speaking again."
@@ -276,11 +334,24 @@ def run_voice_loop(
             time.sleep(0.01)
 
 
-def start_voice_loop_thread(router_callback, on_exchange=None, on_status_change=None):
+def start_voice_loop_thread(
+    router_callback,
+    on_exchange=None,
+    on_status_change=None,
+    *,
+    on_user_text=None,
+    on_assistant_content=None,
+    stream_router_callback=None,
+):
     """Start voice loop in a daemon thread."""
     t = threading.Thread(
         target=run_voice_loop,
         args=(router_callback, on_exchange, on_status_change),
+        kwargs={
+            "on_user_text": on_user_text,
+            "on_assistant_content": on_assistant_content,
+            "stream_router_callback": stream_router_callback,
+        },
         daemon=True,
     )
     t.start()

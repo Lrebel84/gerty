@@ -169,7 +169,7 @@ def main():
     )
 
     def on_voice_exchange(user_msg: str, assistant_msg: str):
-        """Push voice exchange to UI."""
+        """Push voice exchange to UI (legacy, when not streaming)."""
         import json
         try:
             window.evaluate_js(
@@ -177,6 +177,22 @@ def main():
             )
         except Exception as e:
             logger.debug("Voice exchange push failed: %s", e)
+
+    def on_voice_user_text(text: str):
+        """Show user STT text immediately in chat."""
+        import json
+        try:
+            window.evaluate_js(f"window.__gertyAddVoiceUserMessage?.({json.dumps(text)})")
+        except Exception as e:
+            logger.debug("Voice user text push failed: %s", e)
+
+    def on_voice_assistant_content(content: str):
+        """Update streaming assistant message in chat."""
+        import json
+        try:
+            window.evaluate_js(f"window.__gertySetVoiceAssistantContent?.({json.dumps(content)})")
+        except Exception as e:
+            logger.debug("Voice assistant content push failed: %s", e)
 
     def on_voice_status(status: str):
         """Push voice status to UI."""
@@ -187,12 +203,19 @@ def main():
             logger.debug("Voice status push failed: %s", e)
 
     try:
+        from gerty.pipeline import chat_pipeline_stream
         from gerty.voice.loop import start_voice_loop_thread
+
+        def stream_cb(msg):
+            return chat_pipeline_stream(router, msg, source="voice")
 
         start_voice_loop_thread(
             lambda msg: chat_pipeline_sync(router, msg, source="voice"),
             on_exchange=on_voice_exchange,
             on_status_change=on_voice_status,
+            on_user_text=on_voice_user_text,
+            on_assistant_content=on_voice_assistant_content,
+            stream_router_callback=stream_cb,
         )
     except Exception as e:
         logger.warning("Voice loop failed to start: %s", e)

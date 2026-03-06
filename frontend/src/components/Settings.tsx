@@ -22,6 +22,7 @@ interface SettingsData {
   kokoro_voice: string
   stt_backend: string
   faster_whisper_model: string
+  moonshine_model: string
 }
 
 interface RAGStatus {
@@ -37,9 +38,15 @@ const RAG_EMBED_MODELS = ['nomic-embed-text', 'mxbai-embed-large', 'bge-m3']
 
 const STT_BACKENDS = [
   { value: 'auto', label: 'Auto (Groq when WiFi, else local)' },
+  { value: 'moonshine', label: 'Moonshine (local, ~5x faster on short commands)' },
   { value: 'faster_whisper', label: 'faster-whisper (local)' },
   { value: 'vosk', label: 'Vosk (local, legacy)' },
   { value: 'groq', label: 'Groq (cloud, 216x real-time)' },
+] as const
+
+const MOONSHINE_MODELS = [
+  { value: 'tiny', label: 'tiny', desc: '27M params, fastest' },
+  { value: 'base', label: 'base', desc: '61M params, best accuracy' },
 ] as const
 
 const FASTER_WHISPER_MODELS = [
@@ -77,6 +84,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [kokoroVoices, setKokoroVoices] = useState<string[]>([])
   const [sttBackend, setSttBackend] = useState('faster_whisper')
   const [fasterWhisperModel, setFasterWhisperModel] = useState('base')
+  const [moonshineModel, setMoonshineModel] = useState('base')
   const [playingSample, setPlayingSample] = useState(false)
   const [sampleError, setSampleError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -99,6 +107,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           setKokoroVoice(d.kokoro_voice || 'af_sarah')
           setSttBackend(d.stt_backend || 'faster_whisper')
           setFasterWhisperModel(d.faster_whisper_model || 'base')
+          setMoonshineModel(d.moonshine_model || 'base')
         })
         .catch(() => {})
       fetch(`${API_BASE}/voice/list`)
@@ -214,6 +223,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           kokoro_voice: kokoroVoice,
           stt_backend: sttBackend,
           faster_whisper_model: fasterWhisperModel,
+          moonshine_model: moonshineModel,
         }),
       })
       setSaved(true)
@@ -391,7 +401,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
               Voice – Speech recognition (STT)
             </h3>
             <p className="text-xs text-[var(--text-secondary)]">
-              Choose how your speech is transcribed. Restart the app after changing.
+              Choose how your speech is transcribed. faster-whisper (tiny/base) is fastest for voice. Restart the app after changing.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -422,6 +432,25 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
                   </select>
                   <p className="text-xs text-[var(--text-secondary)] mt-1">
                     Ryzen 9: base or small recommended. Models download on first use.
+                  </p>
+                </div>
+              )}
+              {sttBackend === 'moonshine' && (
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] block mb-1">Moonshine model</label>
+                  <select
+                    value={moonshineModel}
+                    onChange={(e) => setMoonshineModel(e.target.value)}
+                    className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+                  >
+                    {MOONSHINE_MODELS.map((m) => (
+                      <option key={m.value} value={m.value} title={m.desc}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">
+                    Variable-length processing, ~5x faster than Whisper on short commands. Requires: pip install &quot;transformers[torch]&quot;
                   </p>
                 </div>
               )}

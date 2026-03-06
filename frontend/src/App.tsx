@@ -114,9 +114,13 @@ function App() {
     }
   }, [])
 
+  const streamingAssistantIdRef = useRef<string | null>(null)
+
   useEffect(() => {
     const win = window as unknown as {
       __gertyAddVoiceExchange?: (user: string, assistant: string) => void
+      __gertyAddVoiceUserMessage?: (user: string) => void
+      __gertySetVoiceAssistantContent?: (content: string) => void
       __gertySetVoiceStatus?: (status: string) => void
     }
     win.__gertyAddVoiceExchange = (user: string, assistant: string) => {
@@ -126,6 +130,25 @@ function App() {
         { id: crypto.randomUUID(), role: 'assistant', content: assistant, timestamp: new Date() },
       ])
     }
+    win.__gertyAddVoiceUserMessage = (user: string) => {
+      streamingAssistantIdRef.current = crypto.randomUUID()
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: 'user', content: user, timestamp: new Date() },
+        { id: streamingAssistantIdRef.current!, role: 'assistant', content: '', timestamp: new Date() },
+      ])
+    }
+    win.__gertySetVoiceAssistantContent = (content: string) => {
+      setMessages((m) => {
+        const idx = m.findIndex((msg) => msg.id === streamingAssistantIdRef.current)
+        if (idx >= 0) {
+          const next = [...m]
+          next[idx] = { ...next[idx], content }
+          return next
+        }
+        return m
+      })
+    }
     win.__gertySetVoiceStatus = (status: string) => {
       if (['idle', 'listening', 'processing'].includes(status)) {
         setVoiceStatus(status as 'idle' | 'listening' | 'processing')
@@ -133,6 +156,8 @@ function App() {
     }
     return () => {
       delete win.__gertyAddVoiceExchange
+      delete win.__gertyAddVoiceUserMessage
+      delete win.__gertySetVoiceAssistantContent
       delete win.__gertySetVoiceStatus
     }
   }, [])
