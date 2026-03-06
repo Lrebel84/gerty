@@ -1,9 +1,61 @@
 """Text-to-speech: Piper (default) or Kokoro-82M (ElevenLabs-like quality)."""
 
+import re
 import logging
 from pathlib import Path
 
 import numpy as np
+
+# Emoji/symbol ranges for removal (covers most common emoji)
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U0001F900-\U0001F9FF"  # supplemental
+    "\U00002702-\U000027B0"  # dingbats
+    "\U00002300-\U000023FF"  # misc technical
+    "\U00002600-\U000026FF"  # misc symbols
+    "]+",
+    re.UNICODE,
+)
+
+
+def sanitize_for_speech(text: str) -> str:
+    """
+    Clean text for natural TTS playback. Strips markdown, emoji, and other
+    content that sounds awkward when read aloud (e.g. "asterisk, dash,
+    smiley face emoji").
+    """
+    if not text or not text.strip():
+        return text
+    s = text.strip()
+    # Remove emoji
+    s = _EMOJI_PATTERN.sub("", s)
+    # Remove phrases like "smiley face emoji", "grinning emoji" (LLM may spell these)
+    s = re.sub(r"\b\w+(?:\s+\w+)?\s+emoji\b", "", s, flags=re.IGNORECASE)
+    # Remove markdown code blocks (```...```)
+    s = re.sub(r"```[\s\S]*?```", "", s)
+    # Remove inline code backticks but keep the text
+    s = re.sub(r"`([^`]+)`", r"\1", s)
+    # Remove markdown bold/italic markers: **text** *text* _text_ __text__
+    s = re.sub(r"\*\*(.+?)\*\*", r"\1", s)
+    s = re.sub(r"\*(.+?)\*", r"\1", s)
+    s = re.sub(r"__(.+?)__", r"\1", s)
+    s = re.sub(r"_(.+?)_", r"\1", s)
+    # Remove headers: # ## ### at line start
+    s = re.sub(r"^#+\s*", "", s, flags=re.MULTILINE)
+    # Remove bullet points at line start: - * • ·
+    s = re.sub(r"^[\s]*[-*•·]\s+", "", s, flags=re.MULTILINE)
+    # Replace URLs with "link"
+    s = re.sub(r"https?://[^\s]+", "link", s)
+    # Remove zero-width and similar invisible chars
+    s = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", s)
+    # Collapse multiple spaces/newlines
+    s = re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
 
 from gerty.config import (
     KOKORO_MODEL_PATH,
@@ -195,7 +247,10 @@ class TextToSpeech:
 
     def synthesize(self, text: str) -> bytes:
         """Synthesize text to raw 16-bit PCM audio bytes."""
-        return self._impl.synthesize(text)
+        cleaned = sanitize_for_speech(text)
+        if not cleaned:
+            return b""
+        return self._impl.synthesize(cleaned)
 
     def get_sample_rate(self) -> int:
         return self._impl.get_sample_rate()

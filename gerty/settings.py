@@ -23,7 +23,7 @@ _DEFAULT_PIPER_VOICE = _piper_name.replace(".onnx", "") if _piper_name else "en_
 DEFAULTS = {
     "local_model": OLLAMA_CHAT_MODEL,
     "openrouter_model": OPENROUTER_MODEL,
-    "custom_prompt": "You are Gerty, a helpful AI assistant. Always identify as Gerty. Format replies in Markdown: use **bold**, headings (##), bullet lists, numbered lists, and code blocks (```language) when helpful. Use emojis sparingly for clarity.",
+    "custom_prompt": "",  # Empty = use built-in DEFAULT_SYSTEM_PROMPT in pipeline
     "provider": "local",  # "local" | "openrouter"
     "rag_enabled": False,  # RAG off by default; use "check documentation" or enable in Settings
     "rag_chat_model": RAG_CHAT_MODEL,  # "__use_chat__" = use local_model; or command-r7b etc for RAG-optimized

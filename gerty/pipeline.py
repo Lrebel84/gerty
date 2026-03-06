@@ -23,6 +23,12 @@ GROUNDING_NOTE = (
     "Prefer saying 'I'm not sure' over inventing details."
 )
 
+# Voice: instruct LLM to avoid markdown/emoji so TTS sounds natural
+VOICE_OUTPUT_NOTE = (
+    " Your reply will be read aloud. Speak naturally: no markdown, asterisks, dashes for bullets, "
+    "emoji, or code blocks. Plain sentences only."
+)
+
 # Voice: keep only last N exchanges to minimize prompt size and latency
 VOICE_HISTORY_MAX_EXCHANGES = 2
 
@@ -82,6 +88,8 @@ def chat_pipeline_stream(
 
     # Grounding note only for local models; OpenRouter models (Grok, etc.) have fresher training
     effective_prompt = custom_prompt + (GROUNDING_NOTE if provider == "local" else "")
+    if source == "voice":
+        effective_prompt = effective_prompt + VOICE_OUTPUT_NOTE
 
     # Summarization: chat only, not voice (avoids extra LLM call)
     if (

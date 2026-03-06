@@ -6,6 +6,20 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.12] - 2025-03-06
+
+### Voice – Natural TTS & Prompt Fixes
+
+#### TTS text sanitizer
+- **Natural speech** – TTS no longer reads markdown, emoji, asterisks, or URLs literally. Strips markdown formatting, emoji, code blocks, bullets, and replaces URLs with "link."
+- **Voice-specific prompt** – When using voice, LLM is instructed to respond in plain sentences (no markdown/emoji) so playback sounds natural.
+
+#### System prompt
+- **Custom prompt default** – Empty custom prompt in Settings now uses the built-in Gerty prompt. Previously the default was baked into settings; now empty means "use built-in."
+- **Grounding note** – Already local-only (not OpenRouter); no change.
+
+---
+
 ## [0.8.11] - 2025-03-06
 
 ### Voice – Parallel TTS Playback
