@@ -89,6 +89,7 @@ Voice is **fully local** by default – no API keys required:
 - **TTS (text-to-speech)**: Piper (fast) or Kokoro-82M (ElevenLabs-like) – Settings → Voice – Text-to-speech. Choose a voice and click **Save** to set it as default.
 - **Wake word** (optional): Install `pip install openwakeword` for "hey jarvis", or set `PICOVOICE_ACCESS_KEY` for "computer"
 - **Settings → Voice – Speech recognition (STT)**: Choose STT backend and faster-whisper model (tiny, base, small, medium, large-v3). Restart app after changing.
+- **Voice + OpenRouter + Groq**: Select **OpenRouter** in the chat header (Local/OpenRouter toggle) for voice to use cloud LLM. For Groq STT: Settings → Voice → Speech recognition → **Groq** or **Auto** (Auto uses Groq when `GROQ_API_KEY` and network available). Add both keys to `.env`. Restart after changing STT.
 
 **TTS note:** Piper is fast and CPU-friendly. **Kokoro-82M** (~80MB) offers ElevenLabs-like quality on CPU—set `TTS_BACKEND=kokoro` in `.env` or choose in Settings. If using the desktop launcher, Kokoro runs from the project venv: ensure `kokoro-onnx` is installed there (`pip install -r requirements.txt` or `./.venv/bin/pip install kokoro-onnx`). For voice cloning, consider [Coqui XTTS](https://github.com/coqui-ai/TTS) or [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (GPU recommended).
 
@@ -113,6 +114,17 @@ Or launch from your application launcher after running `./scripts/install_deskto
 **See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram.
 
 **See [PERFORMANCE.md](PERFORMANCE.md)** – Benchmarks and tips (e.g. Qwen &lt;1s vs Gemma ~6s first response; RAG toggle for speed).
+
+### Reverting to a past working version
+
+To restore a known-good state (e.g. after a bad update):
+
+```bash
+git reset --hard baseline-working
+cd frontend && npm run build && cd ..
+```
+
+**You must rebuild the frontend.** The `frontend/dist/` folder is not in git. Reverting restores source files only; the app serves built JS from `dist/`. Without `npm run build`, you may still run old or broken code even after reverting.
 
 ## Project structure
 

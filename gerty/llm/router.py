@@ -77,10 +77,17 @@ def classify_intent(text: str) -> str:
         if kw in lower:
             return "stopwatch"
     for kw in TIME_KEYWORDS:
-        if kw in lower:
+        if kw == "time":
+            if re.search(r"\btime\b", lower):
+                return "time"
+        elif kw in lower:
             return "time"
     for kw in DATE_KEYWORDS:
-        if kw in lower:
+        if kw == "date":
+            # Whole word only: avoid "dated", "outdated", "update" etc.
+            if re.search(r"\bdate\b", lower):
+                return "date"
+        elif kw in lower:
             return "date"
     for kw in CALC_KEYWORDS:
         if kw in lower or (kw in ("+", "*") and kw in text):

@@ -62,9 +62,11 @@ def chat_pipeline_stream(
     settings = load_settings()
     provider = provider or settings.get("provider", "local")
     local_model = local_model or settings.get("local_model")
-    if source == "voice" and OLLAMA_VOICE_MODEL:
+    if source == "voice" and OLLAMA_VOICE_MODEL and provider == "local":
         local_model = OLLAMA_VOICE_MODEL
         logger.info("Voice: using OLLAMA_VOICE_MODEL=%s", OLLAMA_VOICE_MODEL)
+    elif source == "voice" and provider == "openrouter":
+        logger.info("Voice: using OpenRouter model=%s", settings.get("openrouter_model"))
     openrouter_model = openrouter_model or settings.get("openrouter_model")
     custom_prompt = (
         (custom_prompt or settings.get("custom_prompt") or "").strip()
@@ -78,7 +80,8 @@ def chat_pipeline_stream(
         keep = VOICE_HISTORY_MAX_EXCHANGES * msgs_per_exchange
         effective_history = effective_history[-keep:]
 
-    effective_prompt = custom_prompt + GROUNDING_NOTE
+    # Grounding note only for local models; OpenRouter models (Grok, etc.) have fresher training
+    effective_prompt = custom_prompt + (GROUNDING_NOTE if provider == "local" else "")
 
     # Summarization: chat only, not voice (avoids extra LLM call)
     if (

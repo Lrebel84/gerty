@@ -118,10 +118,10 @@ def run_voice_loop(
         moonshine_model=moonshine_model,
     )
     logger.info(
-        "Voice: STT=%s, model=%s, local_model=%s",
+        "Voice: STT=%s, model=%s, provider=%s",
         backend,
         (moonshine_model if backend == "moonshine" else faster_whisper_model) or "default",
-        settings.get("local_model") or "(default)",
+        settings.get("provider", "local"),
     )
     tts = TextToSpeech()
     capture = AudioCapture(sample_rate=sample_rate, block_size=frame_length)

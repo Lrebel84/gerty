@@ -2,6 +2,31 @@
 
 All notable changes to the Gerty project are documented in this file.
 
+**Reverting to a past commit?** You must run `cd frontend && npm run build && cd ..` after reverting. The app serves built JS from `frontend/dist/`, which is not in git—reverting source alone leaves old/broken code in `dist/`.
+
+---
+
+## [0.8.9] - 2025-03-06
+
+### Intent & Prompt Fixes
+
+- **Intent classification**: "date" and "time" now use whole-word matching. Queries like "what is your info dated" or "why is your info outdated" no longer route to the date tool; they go to chat.
+- **Grounding note**: GROUNDING_NOTE ("acknowledge you may not have up-to-date information") now applies only to local models. OpenRouter models (Grok, etc.) no longer get this instruction, so they stop adding "my info's a bit dated" disclaimers.
+
+---
+
+## [0.8.8] - 2025-03-06
+
+### Voice + OpenRouter + Groq STT
+
+Voice chat now works with OpenRouter (cloud LLM) and Groq STT. No changes to mic button logic.
+
+- **OpenRouter for voice**: Select OpenRouter in the chat header; voice uses it. Pipeline only overrides local_model with OLLAMA_VOICE_MODEL when provider is local.
+- **Groq STT**: Set `stt_backend` to `groq` or `auto` in Settings → Voice. Restart after changing.
+- **Logging**: Voice logs provider and OpenRouter model to `gerty.log` for verification.
+
+---
+
 ## [0.8.7] - 2025-03-06
 
 ### Mic Button & Voice Processing Fixes
@@ -39,11 +64,11 @@ A baseline tag was created for easy rollback:
 # Reset to working baseline (discards any later changes)
 git reset --hard baseline-working
 
-# Or checkout specific files only
-git checkout baseline-working -- frontend/src/App.tsx gerty/ui/server.py gerty/main.py
+# IMPORTANT: You MUST rebuild the frontend after reverting
+cd frontend && npm run build && cd ..
 ```
 
-Tag `baseline-working` points to this commit. After reverting, rebuild the frontend: `cd frontend && npm run build && cd ..`
+**Why the rebuild is required:** `frontend/dist/` is not in git (it's in `.gitignore`). The app serves the built JavaScript from `dist/`, not the source. Reverting restores source files but leaves `dist/` unchanged—so you can end up with reverted source and old/broken built code. Without rebuilding, reverting may appear to do nothing.
 
 ---
 
