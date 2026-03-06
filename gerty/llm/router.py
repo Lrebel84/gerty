@@ -37,6 +37,8 @@ RAG_KEYWORDS = [
     "retrieve", "search my docs", "search documentation",
     "look in my docs", "look in documentation", "find in docs",
     "what do my documents say", "what does my documentation say",
+    "search my files", "what do my files say", "look in my files",
+    "check my files", "check files for",
 ]
 SEARCH_KEYWORDS = ["search for", "search ", "look up", "google"]
 POMODORO_KEYWORDS = ["pomodoro"]

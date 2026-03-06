@@ -1,4 +1,4 @@
-"""Shared chat pipeline: RAG, memory, custom prompt, then route. Used by UI, voice, and Telegram."""
+"""Shared chat pipeline: custom prompt, then route. RAG is on-demand via RagTool only."""
 
 import logging
 from typing import Iterator
@@ -6,11 +6,8 @@ from typing import Iterator
 from gerty.config import (
     OLLAMA_CHAT_MODEL,
     OLLAMA_VOICE_MODEL,
-    RAG_MIN_MSG_LEN,
     RAG_SUMMARIZE_THRESHOLD,
-    RAG_TOP_K,
 )
-from gerty.rag import is_indexed as rag_is_indexed, query as rag_query
 from gerty.settings import load as load_settings
 
 logger = logging.getLogger(__name__)
@@ -25,6 +22,9 @@ GROUNDING_NOTE = (
     "acknowledge you may not have up-to-date information and could be wrong. "
     "Prefer saying 'I'm not sure' over inventing details."
 )
+
+# Voice: keep only last N exchanges to minimize prompt size and latency
+VOICE_HISTORY_MAX_EXCHANGES = 2
 
 
 def _summarize_history(ollama, history: list, model: str) -> str:
@@ -55,8 +55,9 @@ def chat_pipeline_stream(
     source: str | None = None,
 ) -> Iterator[str]:
     """
-    Full chat pipeline: RAG context, summarization, custom prompt, then route.
-    Yields response chunks. Used by HTTP stream; voice/Telegram collect and join.
+    Chat pipeline: custom prompt, optional summarization (chat only), then route.
+    RAG is on-demand via RagTool when user asks to check docs/files.
+    Voice: no RAG, no summarization, minimal history for low latency.
     """
     settings = load_settings()
     provider = provider or settings.get("provider", "local")
@@ -71,41 +72,18 @@ def chat_pipeline_stream(
     )
 
     effective_history = list(history or [])
-    effective_prompt = custom_prompt
-    rag_model_override = None
-    rag_embed_model = settings.get("rag_embed_model", "nomic-embed-text")
-    rag_chat_model = settings.get("rag_chat_model") or "__use_chat__"
-    use_rag_model = rag_chat_model and rag_chat_model != "__use_chat__"
+    if source == "voice" and effective_history:
+        # Voice: trim to last N exchanges to keep prompt small
+        msgs_per_exchange = 2
+        keep = VOICE_HISTORY_MAX_EXCHANGES * msgs_per_exchange
+        effective_history = effective_history[-keep:]
 
-    chunks: list[tuple[str, dict]] = []
-    rag_enabled = settings.get("rag_enabled", False)
-    if rag_enabled and rag_is_indexed() and len(message.strip()) >= RAG_MIN_MSG_LEN:
-        chunks = rag_query(message, top_k=RAG_TOP_K, embed_model=rag_embed_model)
-    if chunks:
-        context = "\n\n".join(c[0] for c in chunks)
-        if use_rag_model:
-            effective_prompt = (
-                custom_prompt
-                + "\n\nRelevant context from your documents and memory:\n---\n"
-                + context
-                + "\n---\nUse this context to answer the user's question."
-            )
-            rag_model_override = rag_chat_model
-        else:
-            effective_prompt = (
-                custom_prompt
-                + "\n\nWhen relevant, you may use this context about the user. "
-                "Keep your usual personality and style.\n---\n"
-                + context
-                + "\n---\n"
-            )
-    else:
-        # No RAG context: add grounding note for external-topic questions
-        effective_prompt = custom_prompt + GROUNDING_NOTE
+    effective_prompt = custom_prompt + GROUNDING_NOTE
 
+    # Summarization: chat only, not voice (avoids extra LLM call)
     if (
-        len(effective_history) >= RAG_SUMMARIZE_THRESHOLD
-        and not chunks
+        source != "voice"
+        and len(effective_history) >= RAG_SUMMARIZE_THRESHOLD
         and router.ollama.is_available()
     ):
         summary = _summarize_history(
@@ -118,11 +96,11 @@ def chat_pipeline_stream(
     yield from router.route_stream(
         message,
         effective_history,
-        provider="local" if rag_model_override else provider,
-        local_model=rag_model_override or local_model,
+        provider=provider,
+        local_model=local_model,
         openrouter_model=openrouter_model,
         custom_prompt=effective_prompt,
-        rag_model=rag_model_override,
+        rag_model=None,
     )
 
 

@@ -333,6 +333,77 @@ Voice chat is working again after fixes for mic button, STT hangs, and VAD sensi
 
 ---
 
+## [0.8.0] - 2025-03-05
+
+### Voice Speed & Reliability Upgrades
+
+RAG and memory injection removed from pipeline; voice path optimized for low latency.
+
+#### Changed
+- **RAG on-demand only** – Automatic RAG/memory injection removed from pipeline. Enable in Settings, then say "check my docs for X", "search my files for Y", etc. No context-window bloat = faster chat and voice.
+- **Voice path** – No RAG, no summarization, minimal history (last 2 exchanges). Optimized for sub-second response feel.
+- **Temperature** – `OLLAMA_TEMPERATURE=0.1` (default) for factual responses; reduces hallucinations.
+- **RagTool** – Respects `rag_enabled`; returns "RAG is disabled in Settings" when off. Expanded keywords: "search my files", "check my files", "what do my files say".
+
+#### Added
+- **OLLAMA_TEMPERATURE** – Configurable (default 0.1) for factual/control assistant use.
+- **RAG keywords** – "search my files", "what do my files say", "look in my files", "check my files", "check files for".
+
+#### Model recommendations
+- **Voice**: `OLLAMA_VOICE_MODEL=llama3.2` (3B) for fast replies.
+- **Chat**: `OLLAMA_CHAT_MODEL=llama3.1:8b` for balance and fewer hallucinations.
+- **STT**: Groq or faster-whisper `tiny` for voice on CPU.
+
+#### Documentation
+- **PERFORMANCE.md** – Updated for RAG tool-only, voice optimizations, model table.
+- **README** – Model recommendations, RAG on-demand description, STT tips.
+- **download_models.sh** – Pre-downloads faster-whisper `tiny` in addition to `base`.
+
+---
+
+## [0.8.1] - 2025-03-05
+
+### STT-Friendly Alarms, Timers & Weather
+
+#### Added
+- **Number words for alarms/timers** – Voice: "set alarm for eleven oh five", "seven thirty am", "timer for five minutes", "twenty minutes". STT may transcribe digits as words.
+- **number_words module** – Converts "eleven oh five" → 11:05, "five minutes" → 5 minutes.
+
+#### Fixed
+- **Weather city extraction** – "forecast for" now checked before "weather for" (avoids matching "weather fore" in "forecast"). Handles STT "ecast for sheffield" when "weather for" is dropped. Strips time qualifiers ("this afternoon", "tomorrow") from location.
+- **Alarm "7 30 am"** – No longer misparses "30 am" as hour; requires 1–12 for am/pm.
+
+---
+
+## [0.8.2] - 2025-03-05
+
+### Kokoro-82M TTS
+
+#### Added
+- **Kokoro TTS** – Optional TTS backend with ElevenLabs-like quality. 82M params, ~80MB, CPU-friendly.
+- **TTS backend selection** – Settings → Voice – Text-to-speech: Piper (fast) or Kokoro.
+- **Kokoro voices** – 20 American English voices (af_sarah, af_bella, am_liam, etc.). British English and other languages available.
+- **Download script** – `./scripts/download_models.sh` now fetches Kokoro model files.
+
+#### Config
+- `TTS_BACKEND=kokoro` in `.env` to use Kokoro
+- `kokoro_voice` in Settings (default: af_sarah)
+
+---
+
+## [0.8.3] - 2025-03-05
+
+### Kokoro TTS Fixes & Docs
+
+#### Fixed
+- **Kokoro "not installed"** – Desktop launcher uses project `.venv`; `kokoro-onnx` must be installed there. Run `./.venv/bin/pip install kokoro-onnx` (or `pip install -r requirements.txt` in venv).
+
+#### Documentation
+- **README** – Voice selection: choose voice in Settings and click Save to set as default. Kokoro install note for venv/desktop launcher.
+- **CHANGELOG** – This entry.
+
+---
+
 ## Known Issues
 
 - **Restart required for STT changes** – Changing STT backend or model in Settings requires restarting the app.

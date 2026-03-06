@@ -18,6 +18,8 @@ interface SettingsData {
   rag_embed_model: string
   memory_enabled: boolean
   piper_voice: string
+  tts_backend: string
+  kokoro_voice: string
   stt_backend: string
   faster_whisper_model: string
 }
@@ -48,6 +50,13 @@ const FASTER_WHISPER_MODELS = [
   { value: 'large-v3', label: 'large-v3', desc: 'Best accuracy, ~1.5B params' },
 ] as const
 
+const KOKORO_VOICES_FALLBACK = [
+  'af_sarah', 'af_bella', 'af_nicole', 'af_nova', 'af_heart', 'af_alloy',
+  'af_aoede', 'af_jessica', 'af_kore', 'af_river', 'af_sky',
+  'am_adam', 'am_echo', 'am_eric', 'am_fenrir', 'am_liam', 'am_michael',
+  'am_onyx', 'am_puck', 'am_santa',
+]
+
 export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [localModel, setLocalModel] = useState('')
   const [openrouterModel, setOpenrouterModel] = useState('')
@@ -63,9 +72,13 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [piperVoice, setPiperVoice] = useState('')
   const [piperVoices, setPiperVoices] = useState<string[]>([])
+  const [ttsBackend, setTtsBackend] = useState('piper')
+  const [kokoroVoice, setKokoroVoice] = useState('af_sarah')
+  const [kokoroVoices, setKokoroVoices] = useState<string[]>([])
   const [sttBackend, setSttBackend] = useState('faster_whisper')
   const [fasterWhisperModel, setFasterWhisperModel] = useState('base')
   const [playingSample, setPlayingSample] = useState(false)
+  const [sampleError, setSampleError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -82,14 +95,19 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           setRagEmbedModel(d.rag_embed_model || 'nomic-embed-text')
           setMemoryEnabled(d.memory_enabled !== false)
           setPiperVoice(d.piper_voice || '')
+          setTtsBackend(d.tts_backend || 'piper')
+          setKokoroVoice(d.kokoro_voice || 'af_sarah')
           setSttBackend(d.stt_backend || 'faster_whisper')
           setFasterWhisperModel(d.faster_whisper_model || 'base')
         })
         .catch(() => {})
       fetch(`${API_BASE}/voice/list`)
         .then((r) => r.json())
-        .then((d) => setPiperVoices(d.voices || []))
-        .catch(() => setPiperVoices([]))
+        .then((d) => {
+          setPiperVoices(d.piper_voices || [])
+          setKokoroVoices(d.kokoro_voices || [])
+        })
+        .catch(() => {})
       fetch(`${API_BASE}/ollama/models`)
         .then((r) => r.json())
         .then((d) => setOllamaModels(d.models || []))
@@ -141,22 +159,36 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
   }
 
   const handlePlaySample = async () => {
-    if (!piperVoice || playingSample) return
+    const voice = ttsBackend === 'kokoro' ? kokoroVoice : piperVoice
+    if (!voice || playingSample) return
     setPlayingSample(true)
+    setSampleError(null)
     try {
       const res = await fetch(`${API_BASE}/voice/sample`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice: piperVoice }),
+        body: JSON.stringify({ voice, tts_backend: ttsBackend }),
       })
-      if (!res.ok) throw new Error('Sample failed')
+      if (!res.ok) {
+        const errText = await res.text()
+        let msg = 'Sample failed'
+        try {
+          const errJson = JSON.parse(errText)
+          if (errJson.error) msg = errJson.error
+        } catch {
+          if (errText) msg = errText.slice(0, 100)
+        }
+        throw new Error(msg)
+      }
       const blob = await res.blob()
+      if (blob.size === 0) throw new Error('Empty audio received')
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
       await audio.play()
       audio.onended = () => URL.revokeObjectURL(url)
-    } catch {
-      // ignore
+    } catch (e) {
+      setSampleError(e instanceof Error ? e.message : 'Playback failed')
+      setTimeout(() => setSampleError(null), 5000)
     } finally {
       setPlayingSample(false)
     }
@@ -178,6 +210,8 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
           rag_embed_model: ragEmbedModel,
           memory_enabled: memoryEnabled,
           piper_voice: piperVoice,
+          tts_backend: ttsBackend,
+          kokoro_voice: kokoroVoice,
           stt_backend: sttBackend,
           faster_whisper_model: fasterWhisperModel,
         }),
@@ -269,7 +303,7 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
                 className="rounded border-[var(--border)] bg-[var(--bg-tertiary)]"
               />
               <label htmlFor="rag-enabled" className="text-sm text-[var(--text-secondary)]">
-                Enable RAG on all messages (when off, use &quot;check documentation&quot; or &quot;retrieve&quot; to query docs)
+                Enable RAG tool (required to search docs; say &quot;check my docs for X&quot; or &quot;search my files for Y&quot;)
               </label>
             </div>
             <p className="text-xs text-[var(--text-secondary)]">
@@ -399,26 +433,48 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
               Voice – Text-to-speech (TTS)
             </h3>
             <p className="text-xs text-[var(--text-secondary)]">
-              Piper voices – fast, local. Download more from{' '}
-              <a href="https://huggingface.co/rhasspy/piper-voices" target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
-                Hugging Face
-              </a>. For more human-like quality, consider Coqui XTTS or Qwen3-TTS (requires GPU).
+              Piper: fast, local. Kokoro: ElevenLabs-like quality (~80MB). Restart app after changing.
             </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">TTS backend</label>
+                <select
+                  value={ttsBackend}
+                  onChange={(e) => setTtsBackend(e.target.value)}
+                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="piper">Piper (fast)</option>
+                  <option value="kokoro">Kokoro (ElevenLabs-like)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[var(--text-secondary)] block mb-1">
+                  {ttsBackend === 'kokoro' ? 'Kokoro voice' : 'Piper voice'}
+                </label>
+                <select
+                  value={ttsBackend === 'kokoro' ? kokoroVoice : piperVoice}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (ttsBackend === 'kokoro') setKokoroVoice(v)
+                    else setPiperVoice(v)
+                  }}
+                  className="w-full bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="">Select voice</option>
+                  {(ttsBackend === 'kokoro'
+                    ? (kokoroVoices.length > 0 ? kokoroVoices : KOKORO_VOICES_FALLBACK)
+                    : (piperVoices.length > 0 ? piperVoices : ['en_US-amy-medium'])
+                  ).map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <div className="flex gap-2">
-              <select
-                value={piperVoice}
-                onChange={(e) => setPiperVoice(e.target.value)}
-                className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-              >
-                <option value="">Select voice</option>
-                {piperVoices.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
               <button
                 type="button"
                 onClick={handlePlaySample}
-                disabled={!piperVoice || playingSample}
+                disabled={!(ttsBackend === 'kokoro' ? kokoroVoice : piperVoice) || playingSample}
                 className="px-4 py-3 bg-[var(--bg-tertiary)] hover:bg-[var(--border)] disabled:opacity-50 rounded-xl text-sm font-medium flex items-center gap-2"
                 title="Play sample"
               >
@@ -434,8 +490,14 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
                 )}
               </button>
             </div>
-            {piperVoices.length === 0 && (
-              <p className="text-xs text-[var(--text-secondary)]">Run <code className="bg-[var(--bg-tertiary)] px-1 rounded">./scripts/download_models.sh</code> to install voices.</p>
+            {ttsBackend === 'piper' && piperVoices.length === 0 && (
+              <p className="text-xs text-[var(--text-secondary)]">Run <code className="bg-[var(--bg-tertiary)] px-1 rounded">./scripts/download_models.sh</code> to install Piper voices.</p>
+            )}
+            {ttsBackend === 'kokoro' && (
+              <p className="text-xs text-[var(--text-secondary)]">Kokoro models download via script. Set TTS_BACKEND=kokoro in .env or choose in Settings.</p>
+            )}
+            {sampleError && (
+              <p className="text-xs text-amber-500">{sampleError}</p>
             )}
           </section>
 

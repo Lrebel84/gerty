@@ -29,7 +29,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | List alarms | "list my alarms" / "show alarms" |
 | Cancel all | "cancel alarms" / "remove alarms" |
 
-*Supports: 7am, 7:30 pm, 7 30, 19:00*
+*Supports: 7am, 7:30 pm, 7 30, 19:00. Voice: "eleven oh five", "seven thirty am"*
 
 ---
 
@@ -42,7 +42,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | List timers | "list timers" / "show timers" |
 | Cancel all | "cancel timers" / "stop timers" |
 
-*Supports: X hours, X minutes, X seconds, or bare number (e.g. "timer 5" = 5 minutes)*
+*Supports: X hours, X minutes, X seconds, or bare number (e.g. "timer 5" = 5 minutes). Voice: "five minutes", "twenty minutes"*
 
 ---
 
@@ -149,11 +149,11 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 | Action | Example |
 |--------|---------|
-| Query documents | "check documentation" / "retrieve the setup guide" / "search my docs for API" |
+| Query documents | "check documentation" / "retrieve the setup guide" / "search my docs for API" / "search my files for X" / "what do my files say about Y" |
 | Index documents | Settings → Knowledge base → "Index now" |
-| Enable on all messages | Settings → Knowledge base → "Enable RAG on all messages" |
+| Enable RAG tool | Settings → Knowledge base → "Enable RAG" (required to use the tool) |
 
-*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. By default, RAG runs only when you ask (e.g. "check documentation"). Enable in Settings to add context to every message.*
+*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Enable RAG in Settings, then say "check my docs for X" or "search my files for Y" to query. On-demand only—no automatic injection.*
 
 ---
 

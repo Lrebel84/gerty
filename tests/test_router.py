@@ -3,6 +3,7 @@
 import pytest
 
 from gerty.llm.router import classify_intent, parse_timer_duration
+from gerty.tools.number_words import normalize_time_words
 
 
 class TestClassifyIntent:
@@ -30,6 +31,9 @@ class TestClassifyIntent:
         assert classify_intent("check documentation") == "rag"
         assert classify_intent("retrieve the setup guide") == "rag"
         assert classify_intent("search my docs for API") == "rag"
+        assert classify_intent("search my files for config") == "rag"
+        assert classify_intent("what do my files say about X") == "rag"
+        assert classify_intent("check my files for the report") == "rag"
 
     def test_chat_default(self):
         assert classify_intent("hello") == "chat"
@@ -57,6 +61,12 @@ class TestParseTimerDuration:
 
     def test_bare_number_assumes_minutes(self):
         assert parse_timer_duration("timer 5") == 300
+
+    def test_number_words_stt(self):
+        """STT may say 'five minutes' instead of '5 minutes'."""
+        assert parse_timer_duration(normalize_time_words("five minutes")) == 300
+        assert parse_timer_duration(normalize_time_words("twenty minutes")) == 1200
+        assert parse_timer_duration(normalize_time_words("timer for ten minutes")) == 600
 
     def test_none_for_invalid(self):
         assert parse_timer_duration("no numbers") is None

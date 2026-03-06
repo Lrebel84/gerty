@@ -7,6 +7,7 @@ import time
 from typing import Callable
 
 from gerty.llm.router import parse_timer_duration
+from gerty.tools.number_words import normalize_time_words
 
 logger = logging.getLogger(__name__)
 from gerty.tools.base import Tool
@@ -89,8 +90,8 @@ class TimersTool(Tool):
             _active_timers.clear()
             return "All timers cancelled."
 
-        # Set timer
-        duration = parse_timer_duration(message)
+        # Set timer (normalize number words for STT: "five minutes" -> "5 minutes")
+        duration = parse_timer_duration(normalize_time_words(message))
         if duration and duration > 0:
             label = _parse_timer_label(message)
             if label in _active_timers:

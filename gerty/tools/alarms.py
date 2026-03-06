@@ -8,6 +8,7 @@ from typing import Any
 
 from gerty.config import ALARMS_FILE, DATA_DIR
 from gerty.tools.base import Tool
+from gerty.tools.number_words import normalize_time_words
 
 
 def _ensure_data_dir():
@@ -29,8 +30,8 @@ def _save_alarms(alarms: list[dict]):
 
 
 def _parse_alarm_time(text: str) -> datetime | None:
-    """Parse time from natural language (e.g. '7:30 am', '7 30', '7am')."""
-    text = text.lower().strip()
+    """Parse time from natural language (e.g. '7:30 am', '7 30', '7am', 'eleven oh five')."""
+    text = normalize_time_words(text).lower().strip()
     now = datetime.now()
 
     # Match "7:30" or "7:30 am" or "7:30pm"
@@ -43,15 +44,16 @@ def _parse_alarm_time(text: str) -> datetime | None:
             h = 0
         return now.replace(hour=h, minute=mi, second=0, microsecond=0)
 
-    # Match "7 am" or "7am" or "7 pm"
+    # Match "7 am" or "7am" or "7 pm" (hour must be 1-12; avoid matching "30 am" in "7 30 am")
     m = re.search(r"(\d{1,2})\s*(am|pm)\b", text)
     if m:
         h = int(m.group(1))
-        if m.group(2) == "pm" and h < 12:
-            h += 12
-        elif m.group(2) == "am" and h == 12:
-            h = 0
-        return now.replace(hour=h, minute=0, second=0, microsecond=0)
+        if 1 <= h <= 12:  # Valid hour for am/pm
+            if m.group(2) == "pm" and h < 12:
+                h += 12
+            elif m.group(2) == "am" and h == 12:
+                h = 0
+            return now.replace(hour=h, minute=0, second=0, microsecond=0)
 
     # Match "7 30" (hour minute)
     nums = re.findall(r"\b(\d{1,2})\b", text)

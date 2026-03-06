@@ -2,28 +2,29 @@
 
 Benchmarks on Pop!_OS (AMD Ryzen 9 / 27GB RAM). First chat message, single turn.
 
-## Local models (no RAG)
+## Local models
 
 | Model | First response time |
 |-------|---------------------|
-| Qwen  | &lt;1 sec (instant) |
-| Gemma | ~6 sec              |
+| Llama 3.2 (3B) | &lt;1 sec (instant) – ideal for voice |
+| Llama 3.1 8B | ~1–2 sec – good balance, fewer hallucinations |
+| Gemma 12B | ~6 sec |
 
-## With RAG enabled
+## RAG (on-demand)
 
-First chat with RAG context: no measurable change vs no-RAG. RAG embedding adds some latency before streaming begins; impact varies by hardware and embed model.
+RAG is now tool-only: say "check my docs for X" or "search my files for Y" to query. No automatic injection = no context-window bloat. Enable in Settings → Knowledge base, then use the tool when needed.
 
 ## Voice (STT/TTS)
 
-Recommended for AMD Ryzen 9:
+For lowest latency on CPU:
 
-- **STT**: faster-whisper `base` or `small` (Settings → Voice – Speech recognition). `tiny` is fastest; `base` balances speed and accuracy. Falls back to Vosk if faster-whisper hangs.
-- **Groq** (cloud): Set `STT_BACKEND=groq` or `auto` and `GROQ_API_KEY` for 216x real-time transcription.
-- **OLLAMA_VOICE_MODEL**: Optional faster model for voice (e.g. `qwen2.5:3b`) in `.env`.
+- **STT**: Groq (cloud, 216x real-time) or faster-whisper `tiny` (fastest local). `base` balances speed and accuracy. Falls back to Vosk if faster-whisper hangs.
+- **Groq**: Set `STT_BACKEND=groq` or `auto` and `GROQ_API_KEY`.
+- **OLLAMA_VOICE_MODEL**: Set to `llama3.2` (3B) for fast voice replies.
 - **Debug**: `GERTY_LOG_LEVEL=INFO` logs STT/LLM/TTS timing to `gerty.log`.
 
 ## Tips for faster responses
 
-- **RAG off**: Settings → Knowledge base → uncheck "Enable RAG" for quick chat without document retrieval.
-- **Smaller models**: Qwen (e.g. qwen2.5:7b) tends to be faster than Gemma for first-token latency.
-- **History summarization**: Uses OpenRouter when available (WiFi); falls back to local. Long history summarization adds delay before the main reply.
+- **Voice path**: No RAG, no summarization, minimal history – optimized for low latency.
+- **Temperature**: `OLLAMA_TEMPERATURE=0.1` for factual responses (reduces hallucinations).
+- **History summarization**: Chat only (not voice). Long history adds delay before reply.

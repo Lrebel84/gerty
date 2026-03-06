@@ -22,8 +22,10 @@ OLLAMA_MODEL = _ollama_default
 OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "") or _ollama_default
 OLLAMA_TOOL_MODEL = os.getenv("OLLAMA_TOOL_MODEL", "") or _ollama_default
 OLLAMA_REASONING_MODEL = os.getenv("OLLAMA_REASONING_MODEL", "") or _ollama_default
-# Voice: faster model for low-latency voice replies (e.g. qwen2.5:3b). Empty = use chat model.
+# Voice: faster model for low-latency voice replies (e.g. llama3.2). Empty = use chat model.
 OLLAMA_VOICE_MODEL = os.getenv("OLLAMA_VOICE_MODEL", "") or None
+# Temperature: 0.0-0.1 for factual/control assistant; higher for creative. Reduces hallucinations.
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
 
 # OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -56,6 +58,7 @@ PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
 
 # Speech-to-text backend: faster_whisper, vosk, groq, or auto (Groq when WiFi, else local)
 STT_BACKEND = os.getenv("STT_BACKEND", "faster_whisper")
+# tiny=fastest for voice on CPU; base=balanced; small/medium/large-v3=better accuracy, slower
 FASTER_WHISPER_MODEL = os.getenv("FASTER_WHISPER_MODEL", "base")
 FASTER_WHISPER_DEVICE = os.getenv("FASTER_WHISPER_DEVICE", "cpu")  # cpu or cuda
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -69,6 +72,13 @@ _vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.
 _piper_path = os.getenv("PIPER_VOICE_PATH", "models/piper/en_US-amy-medium")
 VOSK_MODEL_PATH = PROJECT_ROOT / _vosk_path if not Path(_vosk_path).is_absolute() else Path(_vosk_path)
 PIPER_VOICE_PATH = PROJECT_ROOT / _piper_path if not Path(_piper_path).is_absolute() else Path(_piper_path)
+
+# TTS backend: piper (default) or kokoro (Kokoro-82M, ElevenLabs-like quality)
+TTS_BACKEND = os.getenv("TTS_BACKEND", "piper").lower()
+_kokoro_dir = os.getenv("KOKORO_MODEL_DIR", "models/kokoro")
+KOKORO_DIR = PROJECT_ROOT / _kokoro_dir if not Path(_kokoro_dir).is_absolute() else Path(_kokoro_dir)
+KOKORO_MODEL_PATH = KOKORO_DIR / "kokoro-v1.0.onnx"
+KOKORO_VOICES_PATH = KOKORO_DIR / "voices-v1.0.bin"
 
 # Data directory for alarms etc.
 DATA_DIR = PROJECT_ROOT / "data"

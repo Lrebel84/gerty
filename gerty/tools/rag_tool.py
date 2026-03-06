@@ -30,6 +30,11 @@ def _extract_query(message: str) -> str:
         "find in docs",
         "what do my documents say",
         "what does my documentation say",
+        "search my files",
+        "what do my files say",
+        "look in my files",
+        "check my files",
+        "check files for",
     ]:
         if phrase in lower:
             idx = lower.find(phrase) + len(phrase)
@@ -54,6 +59,11 @@ class RagTool(Tool):
         return "Query documents and memory"
 
     def execute(self, intent: str, message: str) -> str:
+        settings = load_settings()
+        if not settings.get("rag_enabled", False):
+            return (
+                "RAG is disabled in Settings. Enable it in Knowledge base to search your documents."
+            )
         if not rag_is_indexed():
             return (
                 "No documents are indexed yet. Drop PDF, Excel, Word, or text files into "
@@ -62,7 +72,6 @@ class RagTool(Tool):
         query_text = _extract_query(message)
         if not query_text:
             return "What would you like me to check in your documentation?"
-        settings = load_settings()
         embed_model = settings.get("rag_embed_model", "nomic-embed-text")
         chunks = rag_query(query_text, top_k=RAG_TOP_K, embed_model=embed_model)
         if not chunks:

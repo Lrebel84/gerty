@@ -1,6 +1,7 @@
 """FastAPI server for Gerty UI."""
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -8,7 +9,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, Body
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from gerty.config import (
     CHAT_HISTORY_FILE,
@@ -18,8 +19,10 @@ from gerty.config import (
     OLLAMA_BASE_URL,
     OLLAMA_CHAT_MODEL,
     OPENROUTER_API_KEY,
+    PROJECT_ROOT,
     RAG_DIR,
 )
+from gerty.voice.tts import KOKORO_VOICES, TextToSpeech
 from gerty.pipeline import DEFAULT_SYSTEM_PROMPT, chat_pipeline_stream
 from gerty.rag import (
     add_memory_facts as rag_add_memory_facts,
@@ -128,6 +131,67 @@ def create_app(router):
     @app.post("/api/settings")
     async def post_settings(body: dict = Body(default_factory=dict)):
         return save_settings(body)
+
+    def _pcm_to_wav(pcm: bytes, sample_rate: int) -> bytes:
+        """Wrap 16-bit mono PCM in WAV header."""
+        import struct
+        n = len(pcm)
+        return (
+            b"RIFF"
+            + struct.pack("<I", 36 + n)
+            + b"WAVE"
+            + b"fmt "
+            + struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16)
+            + b"data"
+            + struct.pack("<I", n)
+            + pcm
+        )
+
+    @app.get("/api/voice/list")
+    async def voice_list():
+        """Return available TTS voices for Piper and Kokoro."""
+        piper_voices = []
+        piper_dir = PROJECT_ROOT / "models" / "piper"
+        if piper_dir.exists():
+            for p in piper_dir.rglob("*.onnx"):
+                if p.is_file():
+                    name = p.stem
+                    if name not in piper_voices:
+                        piper_voices.append(name)
+        piper_voices.sort()
+        return {"piper_voices": piper_voices, "kokoro_voices": KOKORO_VOICES}
+
+    def _generate_voice_sample(tts_backend: str, voice: str) -> tuple[bytes, int] | str:
+        """Generate TTS sample. Returns (pcm_bytes, sample_rate) or error string."""
+        try:
+            tts = TextToSpeech(backend=tts_backend, voice=voice)
+            pcm = tts.synthesize("Hello, this is a sample of my voice.")
+            return (pcm, tts.get_sample_rate())
+        except Exception as e:
+            logger.exception("Voice sample failed: %s", e)
+            return str(e)
+
+    @app.post("/api/voice/sample")
+    async def voice_sample(body: dict = Body(default_factory=dict)):
+        """Generate TTS sample. Returns WAV audio."""
+        tts_backend = body.get("tts_backend", "piper")
+        voice = body.get("voice", "")
+        if not voice:
+            return {"error": "No voice specified"}
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _generate_voice_sample(tts_backend, voice),
+        )
+        if isinstance(result, str):
+            return Response(
+                content=json.dumps({"error": result}).encode(),
+                status_code=500,
+                media_type="application/json",
+            )
+        pcm, sample_rate = result
+        wav = _pcm_to_wav(pcm, sample_rate)
+        return Response(content=wav, media_type="audio/wav")
 
     @app.get("/api/ollama/models")
     async def ollama_models():

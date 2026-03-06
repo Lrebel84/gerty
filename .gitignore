@@ -8,4 +8,5 @@ models/*.tflite
 models/*.onnx
 models/vosk/
 models/piper/
+models/kokoro/
 frontend/node_modules/

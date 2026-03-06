@@ -84,22 +84,65 @@ def _fetch_weather(lat: float, lon: float, tz: str) -> dict | None:
         return None
 
 
+# Time qualifiers to strip from location (STT may include "this afternoon", etc.)
+_TIME_QUALIFIERS = (
+    "this afternoon", "this morning", "this evening", "tonight", "today",
+    "tomorrow", "tomorrow morning", "tomorrow afternoon", "next week",
+    "this week", "later", "later today",
+)
+
+# STT may drop "weather" or "forecast" -> "ecast" or "cast"
+_WEATHER_INDICATORS = ("weather", "forecast", "ecast", "temperature", "temp")
+
+
+def _strip_time_qualifiers(text: str) -> str:
+    """Remove time qualifiers from location string (e.g. 'sheffield this afternoon' -> 'sheffield')."""
+    result = text.strip()
+    for q in _TIME_QUALIFIERS:
+        # Strip from end: "sheffield this afternoon" -> "sheffield"
+        if result.lower().endswith(q):
+            result = result[: -len(q)].strip().rstrip(",")
+        # Strip from middle/start: "this afternoon in sheffield" - keep sheffield
+        elif f" {q} " in result.lower():
+            result = result.lower().replace(f" {q} ", " ").strip()
+    return result or text.strip()
+
+
 def _extract_city(message: str) -> str | None:
-    """Extract city/location from message."""
+    """Extract city/location from message. Handles STT errors (e.g. 'ecast for sheffield')."""
     lower = message.lower()
-    for phrase in ["weather in", "weather at", "weather for", "forecast for"]:
+    city = None
+
+    # Try explicit phrases first (forecast for before weather for - avoids "weather fore" match)
+    for phrase in ["forecast for", "weather in", "weather at", "weather for"]:
         if phrase in lower:
             idx = lower.find(phrase) + len(phrase)
-            return message[idx:].strip().rstrip("?.,") or None
-    if "weather" in lower or "forecast" in lower:
-        # "what's the weather" - use a default or try to extract
+            city = message[idx:].strip().rstrip("?.,")
+            break
+
+    # Fallback: " for " when message looks like weather (handles STT "ecast for sheffield")
+    if not city and any(ind in lower for ind in _WEATHER_INDICATORS):
+        if " for " in lower:
+            idx = lower.find(" for ") + len(" for ")
+            city = message[idx:].strip().rstrip("?.,")
+    if not city and " for " in lower:
+        # Last resort: take everything after " for " (STT may drop "weather")
+        idx = lower.find(" for ") + len(" for ")
+        city = message[idx:].strip().rstrip("?.,")
+
+    if not city and ("weather" in lower or "forecast" in lower):
         words = message.split()
         for i, w in enumerate(words):
             if w.lower() in ("in", "at", "for") and i + 1 < len(words):
-                return " ".join(words[i + 1 :]).strip().rstrip("?.,")
-        # Default to empty - we'll use a fallback
+                city = " ".join(words[i + 1:]).strip().rstrip("?.,")
+                break
+
+    if not city or len(city) < 2:
         return None
-    return None
+
+    # Strip time qualifiers: "sheffield this afternoon" -> "sheffield"
+    city = _strip_time_qualifiers(city)
+    return city if len(city) >= 2 else None
 
 
 class WeatherTool(Tool):

@@ -30,6 +30,8 @@ DEFAULTS = {
     "rag_embed_model": RAG_EMBED_MODEL,
     "memory_enabled": True,
     "piper_voice": _DEFAULT_PIPER_VOICE,
+    "tts_backend": "piper",  # piper | kokoro (Kokoro-82M, ElevenLabs-like)
+    "kokoro_voice": "af_sarah",  # Kokoro voice (af_sarah, af_bella, am_liam, etc.)
     "stt_backend": "faster_whisper",  # faster_whisper | vosk | groq | auto (Groq when WiFi, else local)
     "faster_whisper_model": "base",  # tiny | base | small | medium | large-v3
 }
@@ -58,9 +60,11 @@ def _validate_value(key: str, value) -> bool:
         return value in ("local", "openrouter")
     if key == "stt_backend":
         return value in ("vosk", "faster_whisper", "groq", "auto")
+    if key == "tts_backend":
+        return value in ("piper", "kokoro")
     if key in ("memory_enabled", "rag_enabled"):
         return isinstance(value, bool)
-    if key in ("local_model", "openrouter_model", "rag_chat_model", "rag_embed_model", "piper_voice", "faster_whisper_model"):
+    if key in ("local_model", "openrouter_model", "rag_chat_model", "rag_embed_model", "piper_voice", "faster_whisper_model", "tts_backend", "kokoro_voice"):
         return isinstance(value, str)
     if key == "custom_prompt":
         return isinstance(value, str)

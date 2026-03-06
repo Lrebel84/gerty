@@ -9,7 +9,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
 - **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro
-- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; index and query your documents in chat (toggle on/off in Settings for faster chat)
+- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. On-demand only (no automatic injection) for fast chat.
 - **Web search** (optional): `pip install duckduckgo-search` for the search tool
 
 ## Setup
@@ -55,14 +55,15 @@ ollama pull llama3.2
 ollama pull llama3.1:8b
 ```
 
-**Model recommendations (AMD Ryzen 9 / 27GB RAM):** For best results on high-end APUs, use a multi-model setup. Add to `.env`:
+**Model recommendations (CPU-only, 32GB RAM):** For voice latency and fewer hallucinations:
 
 ```
-OLLAMA_CHAT_MODEL=llama3.1:8b     # Good balance of speed and quality
-OLLAMA_REASONING_MODEL=deepseek-r1:7b  # Specialist: coding, math
+OLLAMA_CHAT_MODEL=llama3.1:8b    # Good balance, fewer hallucinations
+OLLAMA_VOICE_MODEL=llama3.2      # Fast 3B model for low-latency voice
+OLLAMA_TEMPERATURE=0.1           # Factual responses (reduces hallucinations)
 ```
 
-Or: `ollama pull gemma3:12b` and `ollama pull deepseek-r1:7b`. Check `ollama list` for available model names.
+For complex tasks: `OLLAMA_REASONING_MODEL=deepseek-r1:7b`. Check `ollama list` for available models.
 
 ### 4. RAG Knowledge Base (optional)
 
@@ -83,13 +84,13 @@ Drop PDF, Excel, Word, or text files into `data/knowledge/`, then open Settings 
 
 Voice is **fully local** by default – no API keys required:
 - **Single-click mic**: Click once to speak; auto-stops when you finish (or click again to stop early). Uses Silero VAD for end-of-speech detection.
-- **STT (speech-to-text)**: faster-whisper (default), Vosk (legacy), Groq (cloud, 216x real-time), or Auto (Groq when WiFi, else local). Settings → Voice – Speech recognition.
+- **STT (speech-to-text)**: faster-whisper (default), Vosk (legacy), Groq (cloud, 216x real-time), or Auto (Groq when WiFi, else local). For voice on CPU: use `tiny` or Groq. Settings → Voice – Speech recognition.
 - **Vosk fallback**: If faster-whisper hangs (e.g. under PyWebView), voice automatically falls back to Vosk.
-- **TTS (text-to-speech)**: Piper voices – Settings → Voice – Text-to-speech
+- **TTS (text-to-speech)**: Piper (fast) or Kokoro-82M (ElevenLabs-like) – Settings → Voice – Text-to-speech. Choose a voice and click **Save** to set it as default.
 - **Wake word** (optional): Install `pip install openwakeword` for "hey jarvis", or set `PICOVOICE_ACCESS_KEY` for "computer"
 - **Settings → Voice – Speech recognition (STT)**: Choose STT backend and faster-whisper model (tiny, base, small, medium, large-v3). Restart app after changing.
 
-**TTS note:** Piper is fast and CPU-friendly. For more human-like quality (voice cloning, higher naturalness), consider [Coqui XTTS](https://github.com/coqui-ai/TTS) or [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) – they require more resources (GPU recommended).
+**TTS note:** Piper is fast and CPU-friendly. **Kokoro-82M** (~80MB) offers ElevenLabs-like quality on CPU—set `TTS_BACKEND=kokoro` in `.env` or choose in Settings. If using the desktop launcher, Kokoro runs from the project venv: ensure `kokoro-onnx` is installed there (`pip install -r requirements.txt` or `./.venv/bin/pip install kokoro-onnx`). For voice cloning, consider [Coqui XTTS](https://github.com/coqui-ai/TTS) or [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS) (GPU recommended).
 
 ### 6. Install desktop launcher (Pop!_OS / Ubuntu)
 

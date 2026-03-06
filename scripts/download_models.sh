@@ -7,8 +7,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 MODELS_DIR="$PROJECT_ROOT/models"
 VOSK_DIR="$MODELS_DIR/vosk"
 PIPER_DIR="$MODELS_DIR/piper"
+KOKORO_DIR="$MODELS_DIR/kokoro"
 
-mkdir -p "$VOSK_DIR" "$PIPER_DIR"
+mkdir -p "$VOSK_DIR" "$PIPER_DIR" "$KOKORO_DIR"
 
 # Vosk small English model (0.22 doesn't exist; 0.15 is the available small model)
 VOSK_MODEL="vosk-model-small-en-us-0.15"
@@ -42,6 +43,19 @@ else
   echo "Piper voice already exists."
 fi
 
+# Kokoro-82M TTS (optional; ElevenLabs-like quality, ~80MB quantized)
+if [ ! -f "$KOKORO_DIR/kokoro-v1.0.onnx" ]; then
+  echo "Downloading Kokoro-82M TTS model..."
+  if curl -L "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" -o "$KOKORO_DIR/kokoro-v1.0.onnx" 2>/dev/null; then
+    curl -L "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" -o "$KOKORO_DIR/voices-v1.0.bin" 2>/dev/null || true
+    echo "Kokoro TTS installed. Set TTS_BACKEND=kokoro in .env to use."
+  else
+    echo "Skip Kokoro (optional). pip install kokoro-onnx when ready."
+  fi
+else
+  echo "Kokoro model already exists."
+fi
+
 # Optional: pull common Ollama models (requires ollama running)
 if command -v ollama &>/dev/null; then
   echo "Pulling Ollama models (llama3.2, llama3.1:8b)..."
@@ -50,15 +64,19 @@ if command -v ollama &>/dev/null; then
   echo "Ollama models ready. Run 'ollama list' to see installed models."
 fi
 
-# Pre-download faster-whisper base model (optional; downloads on first use if skipped)
+# Pre-download faster-whisper models: tiny for voice (fastest), base for balanced
 if command -v python3 &>/dev/null; then
-  echo "Pre-downloading faster-whisper base model..."
+  echo "Pre-downloading faster-whisper models (tiny for voice, base for accuracy)..."
   if python3 -c "
 from faster_whisper import WhisperModel
-WhisperModel('base', device='cpu', compute_type='int8')
-print('faster-whisper base model ready.')
+WhisperModel('tiny', device='cpu', compute_type='int8')
+print('faster-whisper tiny ready.')
 " 2>/dev/null; then
-    :
+    python3 -c "
+from faster_whisper import WhisperModel
+WhisperModel('base', device='cpu', compute_type='int8')
+print('faster-whisper base ready.')
+" 2>/dev/null || true
   else
     echo "Skip faster-whisper (pip install faster-whisper to enable)"
   fi
