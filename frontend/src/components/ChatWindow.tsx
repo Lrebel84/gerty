@@ -112,7 +112,7 @@ export function ChatWindow({ messages, onSend, onNewChat, localModel, voiceStatu
           <img src="/gerty.png" alt="Gerty" className="h-9 w-9 object-contain" />
         </div>
         <div className="flex items-center gap-3">
-          {onNewChat && messages.length > 0 && (
+          {onNewChat && (
             <button
               type="button"
               onClick={onNewChat}

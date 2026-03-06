@@ -6,6 +6,14 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.10] - 2025-03-06
+
+### UI
+
+- **New chat button**: Now always visible in the chat header. Previously hidden when chat was empty (`messages.length === 0`); it should be available at all times to start a new conversation.
+
+---
+
 ## [0.8.9] - 2025-03-06
 
 ### Intent & Prompt Fixes
