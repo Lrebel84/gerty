@@ -202,19 +202,54 @@ def main():
             logger.debug("Voice status push failed: %s", e)
 
     try:
+        import httpx
+
         from gerty.pipeline import chat_pipeline_stream
         from gerty.voice.loop import start_voice_loop_thread
 
+        def _get_voice_history() -> list[dict]:
+            """Fetch persisted chat history for voice context."""
+            try:
+                r = httpx.get(
+                    f"http://{SERVER_HOST}:8765/api/chat/history",
+                    timeout=2,
+                )
+                if r.status_code == 200:
+                    msgs = r.json().get("messages", [])
+                    return [
+                        {"role": m.get("role", "user"), "content": m.get("content", "")}
+                        for m in msgs
+                    ]
+            except Exception:
+                pass
+            return []
+
         def stream_cb(msg):
-            return chat_pipeline_stream(router, msg, source="voice")
+            history = _get_voice_history()
+            return chat_pipeline_stream(
+                router, msg, history=history, source="voice"
+            )
+
+        def sync_cb(msg):
+            history = _get_voice_history()
+            return chat_pipeline_sync(
+                router, msg, history=history, source="voice"
+            )
+
+        def on_save_after_exchange():
+            try:
+                window.evaluate_js("window.__gertySaveHistory?.()")
+            except Exception as e:
+                logger.debug("Voice save after exchange failed: %s", e)
 
         start_voice_loop_thread(
-            lambda msg: chat_pipeline_sync(router, msg, source="voice"),
+            sync_cb,
             on_exchange=on_voice_exchange,
             on_status_change=on_voice_status,
             on_user_text=on_voice_user_text,
             on_assistant_content=on_voice_assistant_content,
             stream_router_callback=stream_cb,
+            on_save_after_exchange=on_save_after_exchange,
         )
     except Exception as e:
         logger.warning("Voice loop failed to start: %s", e)

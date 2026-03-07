@@ -80,8 +80,8 @@ def chat_pipeline_stream(
     )
 
     effective_history = list(history or [])
-    if source == "voice" and effective_history:
-        # Voice: trim to last N exchanges to keep prompt small
+    if source == "voice" and effective_history and provider == "local":
+        # Voice: trim to last N exchanges for local only (OpenRouter gets full context)
         msgs_per_exchange = 2
         keep = VOICE_HISTORY_MAX_EXCHANGES * msgs_per_exchange
         effective_history = effective_history[-keep:]
@@ -91,9 +91,10 @@ def chat_pipeline_stream(
     if source == "voice":
         effective_prompt = effective_prompt + VOICE_OUTPUT_NOTE
 
-    # Summarization: chat only, not voice (avoids extra LLM call)
+    # Summarization: chat only, local only (OpenRouter gets full context)
     if (
         source != "voice"
+        and provider == "local"
         and len(effective_history) >= RAG_SUMMARIZE_THRESHOLD
         and router.ollama.is_available()
     ):

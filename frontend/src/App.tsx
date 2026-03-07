@@ -202,10 +202,14 @@ function App() {
     }
     setMessages((m) => [...m, assistantMsg])
 
+    const effectiveProvider = useProvider ?? provider
     const requestBody = {
       message: content,
-      history: messages.slice(-10).map((m) => ({ role: m.role, content: m.content })),
-      provider: useProvider ?? provider,
+      history: (effectiveProvider === 'openrouter' ? messages : messages.slice(-10)).map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      provider: effectiveProvider,
       local_model: localModel || undefined,
       openrouter_model: openrouterModel || undefined,
     }

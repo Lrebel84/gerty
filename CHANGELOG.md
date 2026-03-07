@@ -6,6 +6,19 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.14] - 2025-03-07
+
+### OpenRouter Full Conversation Context
+
+When using OpenRouter (not local), the model now receives full conversation history in both text chat and voice chat.
+
+- **Text chat (OpenRouter)**: Full message history sent; no summarization. Local models keep the existing 10-message + summary behavior.
+- **Voice (OpenRouter)**: Full history passed to the model. Voice fetches persisted history before each turn.
+- **Voice (Local)**: Unchanged – last 2 exchanges (4 messages) for low latency.
+- **Save after voice**: Voice exchanges are persisted after each turn so the next voice turn has context.
+
+---
+
 ## [0.8.13] - 2025-03-07
 
 ### Wake Word & Voice UX

@@ -73,6 +73,7 @@ def run_voice_loop(
     on_user_text=None,
     on_assistant_content=None,
     stream_router_callback=None,
+    on_save_after_exchange=None,
 ):
     """
     Run voice loop in current thread. Blocks.
@@ -83,6 +84,7 @@ def run_voice_loop(
     on_assistant_content(content) called as LLM streams – update assistant message.
     stream_router_callback(msg) yields chunks; if provided, enables streaming TTS (sentence-by-sentence).
     on_status_change("idle"|"listening"|"processing") called for UI updates.
+    on_save_after_exchange() called when an exchange completes – persist history for next turn.
     """
     try:
         from gerty.voice.audio import (
@@ -346,6 +348,11 @@ def run_voice_loop(
         except Exception as e:
             logger.warning("Voice processing failed: %s", e)
         finally:
+            if on_save_after_exchange:
+                try:
+                    on_save_after_exchange()
+                except Exception as e:
+                    logger.debug("on_save_after_exchange failed: %s", e)
             _status("idle")
             recording = False
             audio_chunks = []
@@ -438,6 +445,7 @@ def start_voice_loop_thread(
     on_user_text=None,
     on_assistant_content=None,
     stream_router_callback=None,
+    on_save_after_exchange=None,
 ):
     """Start voice loop in a daemon thread."""
     t = threading.Thread(
@@ -447,6 +455,7 @@ def start_voice_loop_thread(
             "on_user_text": on_user_text,
             "on_assistant_content": on_assistant_content,
             "stream_router_callback": stream_router_callback,
+            "on_save_after_exchange": on_save_after_exchange,
         },
         daemon=True,
     )
