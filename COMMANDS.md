@@ -8,7 +8,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Scheduling | Alarms, timers, pomodoro |
 | Utilities | Calculator, unit conversion, random, notes |
 | Info | Weather, web search |
-| Knowledge | RAG (documents in `data/knowledge/`) |
+| Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 
 ---
 
@@ -26,10 +26,16 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Action | Example |
 |--------|---------|
 | Set alarm | "set alarm for 7am" / "wake me at 7:30" / "alarm for 6pm" |
+| Set daily alarm | "daily alarm for 7am" / "alarm for 7am every day" / "repeating alarm at 6pm" |
+| Set named alarm | "alarm for 7am for workout" |
 | List alarms | "list my alarms" / "show alarms" |
 | Cancel all | "cancel alarms" / "remove alarms" |
 
 *Supports: 7am, 7:30 pm, 7 30, 19:00. Voice: "eleven oh five", "seven thirty am"*
+
+**Daily alarms** repeat every day at the same time. Dismissing one reschedules it for tomorrow. Use the "Daily" toggle in the overlay to convert existing alarms.
+
+**Note:** To stop a sounding alarm, say "cancel" or "stop", or use the wake word. See [docs/ALARM.md](docs/ALARM.md).
 
 ---
 
@@ -42,7 +48,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | List timers | "list timers" / "show timers" |
 | Cancel all | "cancel timers" / "stop timers" |
 
-*Supports: X hours, X minutes, X seconds, or bare number (e.g. "timer 5" = 5 minutes). Voice: "five minutes", "twenty minutes"*
+*Supports: X hours, X minutes, X seconds, or bare number (e.g. "timer 5" = 5 minutes). Voice: "five minutes", "twenty minutes". You can also add timers from the Alarms & Timers overlay.*
 
 ---
 
@@ -153,7 +159,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Index documents | Settings → Knowledge base → "Index now" |
 | Enable RAG tool | Settings → Knowledge base → "Enable RAG" (required to use the tool) |
 
-*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Enable RAG in Settings, then say "check my docs for X" or "search my files for Y" to query. On-demand only—no automatic injection.*
+*Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Enable RAG in Settings. Long-term memory (Settings toggle) extracts facts from chat. Say "check my docs for X" or "search my files for Y" to query documents and memory. On-demand only—no automatic injection. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).*
 
 ---
 
@@ -181,4 +187,4 @@ When using Gerty via Telegram:
 
 ## Voice
 
-Say **"computer"** to wake Gerty, then speak your command. All tools above work via voice.
+Say **"our Gurt"** to wake Gerty (Picovoice; set `PICOVOICE_ACCESS_KEY` in `.env`), then speak your command. Or use the single-click mic. All tools above work via voice.

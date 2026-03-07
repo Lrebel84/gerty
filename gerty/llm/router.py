@@ -21,10 +21,12 @@ DATE_KEYWORDS = ["date", "what date", "today's date", "what day", "what's the da
 ALARM_KEYWORDS = [
     "alarm", "set alarm", "wake me", "remind me at",
     "alarm for", "wake up", "set an alarm",
+    "wake me up", "remind me", "alarm at",
 ]
 TIMER_KEYWORDS = [
     "timer", "set timer", "countdown", "timer for",
     "minute timer", "minute", "second timer",
+    "start a timer", "countdown for",
 ]
 CALC_KEYWORDS = ["calculate", "calculator", "what is", "what's", "compute", "+", "*", "% of"]
 UNIT_KEYWORDS = ["convert", "kilograms to", "miles to", "fahrenheit to", "celsius to"]

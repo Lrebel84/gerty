@@ -40,6 +40,9 @@ function App() {
     return SIDEBAR_DEFAULT
   })
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'listening' | 'processing'>('idle')
+  const [skillsViewOpen, setSkillsViewOpen] = useState(false)
+  const [alarmsTimersViewOpen, setAlarmsTimersViewOpen] = useState(false)
+  const [notesViewOpen, setNotesViewOpen] = useState(false)
   const [provider, setProvider] = useState<'local' | 'openrouter'>('local')
   const [localModel, setLocalModel] = useState('')
   const [openrouterModel, setOpenrouterModel] = useState('')
@@ -303,8 +306,13 @@ function App() {
         width={sidebarWidth}
         onResize={handleSidebarResize}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onSkillsClick={() => setSkillsViewOpen(true)}
+        onAlarmsTimersClick={() => setAlarmsTimersViewOpen(true)}
+        onNotesClick={() => setNotesViewOpen(true)}
         voiceStatus={voiceStatus}
         onSettingsSave={refetchSettings}
+        provider={provider}
+        onProviderChange={handleProviderChange}
       />
       <main
         className="flex-1 flex flex-col transition-[margin] duration-200"
@@ -313,15 +321,18 @@ function App() {
         <ChatWindow
           messages={messages}
           onSend={handleSend}
-          localModel={localModel}
           onNewChat={() => {
             setMessages([])
             fetch(`${API_BASE}/chat/history`, { method: 'DELETE' }).catch(() => {})
           }}
           voiceStatus={voiceStatus}
-          provider={provider}
-          onProviderChange={handleProviderChange}
           onVoiceStatusChange={setVoiceStatus}
+          skillsViewOpen={skillsViewOpen}
+          onCloseSkills={() => setSkillsViewOpen(false)}
+          alarmsTimersViewOpen={alarmsTimersViewOpen}
+          onCloseAlarmsTimers={() => setAlarmsTimersViewOpen(false)}
+          notesViewOpen={notesViewOpen}
+          onCloseNotes={() => setNotesViewOpen(false)}
         />
       </main>
     </div>

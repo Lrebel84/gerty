@@ -12,6 +12,7 @@ from gerty.config import (
     STT_BACKEND,
     VAD_MIN_SILENCE_MS,
     VOSK_MODEL_PATH,
+    VOICE_AUTO_LISTEN_ENABLED,
     VOICE_AUTO_LISTEN_GRACE_SEC,
     VOICE_AUTO_LISTEN_SETTLE_SEC,
     VOICE_RESPONSE_TIMEOUT,
@@ -19,6 +20,7 @@ from gerty.config import (
     VOICE_WAKE_GRACE_SEC,
 )
 from gerty.settings import load as load_settings
+from gerty.voice.alarm_state import get_sounding_alarm, stop_alarm_sounding
 from gerty.voice.feedback import play_listening_ping, play_processing_ping
 from gerty.voice.wake_word import (
     create_wake_detector,
@@ -238,6 +240,23 @@ def run_voice_loop(
                 if consume_voice_cancel():
                     logger.info("Voice: cancelled after STT")
                     return
+                # Alarm mode: if alarm is sounding and user said "cancel" or "stop", stop alarm and go to idle
+                if get_sounding_alarm():
+                    normalized = _normalize_for_end_phrase(text)
+                    logger.info("Voice: alarm sounding, user said %r (normalized: %r)", text, normalized)
+                    if "cancel" in normalized or "stop" in normalized or normalized in ("cancel", "stop"):
+                        logger.info("Voice: alarm cancelled by voice: %r", text)
+                        stop_alarm_sounding()
+                        if on_user_text:
+                            try:
+                                on_user_text("cancel")
+                            except Exception as e:
+                                logger.debug("on_user_text failed: %s", e)
+                        return
+                    # Not cancel - keep listening; re-request PTT to reopen mic
+                    from gerty.voice.wake_word import request_ptt_recording
+                    request_ptt_recording()
+                    return
                 # Conversation end phrases: go to idle without responding (avoids loop with background noise)
                 # Normalize: STT often returns "thanks." or "stop!" - strip punctuation
                 normalized = _normalize_for_end_phrase(text)
@@ -390,7 +409,7 @@ def run_voice_loop(
                     except Exception as e:
                         logger.debug("on_save_after_exchange failed: %s", e)
                 had_successful_response = bool(text and reply)
-                if had_successful_response and wake is not None:
+                if had_successful_response and wake is not None and VOICE_AUTO_LISTEN_ENABLED:
                     time.sleep(VOICE_AUTO_LISTEN_SETTLE_SEC)
                     try:
                         capture.flush()
@@ -448,7 +467,16 @@ def run_voice_loop(
             ptt_start = consume_ptt_request()
 
             if wake_detected or ptt_start:
-                if is_processing.is_set():
+                if wake_detected and get_sounding_alarm():
+                    # Wake word during alarm: stop alarm, go to idle
+                    stop_alarm_sounding()
+                    if recording:
+                        recording = False
+                        audio_chunks.clear()
+                        recording_started_at = None
+                    auto_listen_mode = False
+                    _status("idle")
+                elif is_processing.is_set():
                     request_voice_cancel()
                 elif recording and auto_listen_mode:
                     # Wake word during auto-listen: stop listening, go to idle (escape the loop)

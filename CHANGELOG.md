@@ -4,6 +4,121 @@ All notable changes to the Gerty project are documented in this file.
 
 **Reverting to a past commit?** You must run `cd frontend && npm run build && cd ..` after reverting. The app serves built JS from `frontend/dist/`, which is not in git—reverting source alone leaves old/broken code in `dist/`.
 
+**Historical note:** Older entries describe features as they were at release. Some have since changed:
+- **Wake word:** Originally "computer" (Porcupine); now **"our Gurt"** (Picovoice custom model). See README.
+- **Alarm:** "Say cancel to stop" flow was attempted but did not work. Alarm uses basic notify + manual cancel. See `docs/ALARM.md`.
+- **RAG + memory:** Documents and long-term memory (extracted facts) both queryable. See `docs/RAG_MEMORY.md`.
+
+---
+
+## [0.8.20] - 2025-03-07
+
+### Alarms & Timers Overhaul, Recurring Alarms, Voice UX
+
+#### Alarms & Timers fixes
+- **Alarms stay visible when triggered** – Triggered alarm remains in list until you cancel (voice or X). Dismissing reschedules daily alarms to tomorrow.
+- **Voice-set timers now show** – Explicit refresh when voice exchange completes; timers set via voice appear in the overlay.
+- **Unique timer IDs** – Multiple timers no longer overwrite; per-timer cancel in UI.
+- **Manual add forms** – Add alarms (time + label + daily toggle) and timers (presets, duration, label) from the overlay.
+
+#### Recurring/daily alarms
+- **Voice:** "daily alarm for 7am", "alarm for 6pm every day", "repeating alarm at 7:30"
+- **UI:** Daily checkbox when adding; toggle button to convert existing alarms between one-time and daily
+- **Behavior:** Daily alarms reschedule to tomorrow when dismissed; one-time alarms are removed
+
+#### Voice: wake word each time
+- **VOICE_AUTO_LISTEN_ENABLED** – Default `0` (off). Mic no longer auto-opens after AI responds; say "our gerty" each time to continue. Set `VOICE_AUTO_LISTEN_ENABLED=1` in `.env` to restore auto-listen.
+
+#### API
+- `POST /api/alarms` – `{ time, label?, recurring?: "daily" }`
+- `POST /api/alarms/toggle-recurring` – `{ id }` to toggle daily/one-time
+- `POST /api/timers` – `{ duration_sec, label? }`
+- `POST /api/timers/cancel` – `{ id? }` for per-timer or all
+
+#### Docs
+- COMMANDS.md – Daily alarm examples, skills updated
+- .env.example – VOICE_AUTO_LISTEN_ENABLED
+
+---
+
+## [0.8.19] - 2025-03-07
+
+### Sidebar Overlays: Alarms & Timers, Notes
+
+#### Sidebar changes
+- **Alarms & Timers** – Combined into single button; opens overlay instead of inline list
+- **Notes** – New button; opens overlay with notes list, add, and clear
+- Alarms and Timers sections removed from sidebar (now overlay-only)
+
+#### Alarms & Timers overlay
+- Lists alarms with Stop (sounding) / Cancel per alarm; Cancel all
+- Lists timers with remaining time; Cancel all
+- Polls every 2s while open
+
+#### Notes overlay
+- Lists notes from `data/notes.txt`
+- Add note via input + Add button
+- Clear all notes
+- **API:** `GET /api/notes`, `POST /api/notes` (body: `{ "text": "..." }`), `DELETE /api/notes` – clear all
+
+#### Backend
+- `gerty/tools/notes.py` – added `get_notes()`, `add_note()`, `clear_notes()` for API
+
+---
+
+## [0.8.18] - 2025-03-07
+
+### Documentation Cleanup & Skills UI
+
+#### Archived docs
+- Moved old/unused docs to `docs/archive/`: `ALARM_STATUS.md`, `WAKE_WORD_STATUS.md`, `WAKE_WORD_SYNTHETIC_TRAINING.md`, `WAKE_WORD_NEXT_STEPS.md`, `WAKE_WORD_OPENWAKEWORD_README.md`
+- Added `docs/archive/README.md` – index of archived files and why they were archived
+- Wake word is now Picovoice "our Gurt" only; openWakeWord docs archived
+
+#### New docs
+- **`docs/ALARM.md`** – Current alarm behavior (notify, manual cancel, TTS repeat)
+- **`docs/RAG_MEMORY.md`** – RAG knowledge base (documents) and long-term memory (extracted facts) – how they work, storage, settings
+- **`docs/ADDING_TOOLS.md`** – Checklist for adding new tools (register, router, skills lists, COMMANDS.md)
+
+#### Docs updates
+- **README** – RAG section mentions long-term memory; wake word only Picovoice (openWakeWord removed)
+- **COMMANDS.md** – Wake word "our Gurt" (not "computer"); alarm note links to `docs/ALARM.md`; Knowledge section mentions memory and `docs/RAG_MEMORY.md`
+- **models/wakeword/README.md** – Replaced with Picovoice-focused note
+- **CHANGELOG** – Historical note at top for wake word, alarm, RAG changes
+
+#### Skills UI
+- **Skills button** in sidebar – opens overlay in chat window (overlays messages only; input bar stays visible)
+- **Skills overlay** – Lists all tools by category with descriptions and example commands; X button to close
+- **`frontend/src/skills.ts`** – Local skills list for instant load (no API fetch)
+- **`gerty/tools/skills_registry.py`** – Backend skills registry (API at `/api/skills`)
+
+#### Adding tools workflow
+- **`.cursor/rules/adding-tools.mdc`** – Cursor rule for tool-related files; reminds to update skills lists
+- **Comments** in `main.py`, `skills_registry.py`, `skills.ts` – Point to checklist and `docs/ADDING_TOOLS.md`
+
+---
+
+## [0.8.17] - 2025-03-07
+
+### Alarm "Say Cancel to Stop" – Attempted, Did Not Work
+
+Multiple attempts were made to change alarm behavior so that when an alarm triggers:
+
+1. Gerty says "This is your [time] alarm, say cancel to stop" (repeated every 30s)
+2. The mic opens and listens only for "cancel", "stop", or the wake word
+3. The alarm stays visible in the UI with a manual Stop button
+4. User can dismiss via voice or UI
+
+**What was implemented:**
+- `gerty/voice/alarm_state.py` – shared state, TTS repeat thread, beep on start
+- Alarm trigger loop: `set_sounding_alarm()`, `request_ptt_recording()`, notify with TTS
+- Voice loop: check for "cancel"/"stop" when alarm sounding; wake word stops alarm
+- API: `GET /api/alarms` returns `sounding`; `POST /api/alarms/dismiss` to stop
+- UI: ChatWindow banner and Sidebar list show sounding alarm with Stop button
+- Alarms no longer removed on trigger (kept until user stops)
+
+**Result:** None of this worked as described. Alarms reverted to old behavior ("Alarm: alarm at [time]"), vanished from UI, did not listen for cancel/stop. See `docs/archive/ALARM_STATUS.md` for implementation details.
+
 ---
 
 ## [0.8.16] - 2025-03-07

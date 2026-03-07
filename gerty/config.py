@@ -92,6 +92,8 @@ VOICE_WAKE_GRACE_SEC = float(os.getenv("VOICE_WAKE_GRACE_SEC", "1.5"))
 VOICE_AUTO_LISTEN_SETTLE_SEC = float(os.getenv("VOICE_AUTO_LISTEN_SETTLE_SEC", "0.2"))
 # Grace period when auto-opened after response: mic stays open longer (2s) to catch dominant voice
 VOICE_AUTO_LISTEN_GRACE_SEC = float(os.getenv("VOICE_AUTO_LISTEN_GRACE_SEC", "2.0"))
+# If False, mic does NOT auto-open after AI responds; you must say wake word ("our gerty") each time
+VOICE_AUTO_LISTEN_ENABLED = os.getenv("VOICE_AUTO_LISTEN_ENABLED", "0").lower() in ("1", "true", "yes")
 
 # Model paths (resolved from project root)
 _vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.15")

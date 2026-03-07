@@ -67,14 +67,27 @@ def _run_telegram_bot(router_callback):
 
 
 def _alarm_trigger_loop():
-    """Background loop: poll for due alarms and notify."""
+    """Background loop: poll for due alarms, start sounding (TTS repeat + listen for cancel)."""
     import time
+    from gerty.voice.alarm_state import set_sounding_alarm, get_sounding_alarm
+    from gerty.voice.wake_word import request_ptt_recording
+
     while True:
         try:
+            # Don't trigger if one is already sounding
+            if get_sounding_alarm():
+                time.sleep(ALARM_POLL_INTERVAL)
+                continue
             due = get_pending_alarms_for_trigger()
-            for alarm in due:
-                msg = alarm.get("label", "Alarm") + " at " + alarm.get("time", "")
-                notify(f"Alarm: {msg}", channels=["tts", "system", "telegram"])
+            if due:
+                alarm = due[0]
+                time_str = alarm.get("time", "alarm")
+                logger.info("Alarm triggering: %s – setting sounding, notifying, requesting PTT for voice cancel", time_str)
+                set_sounding_alarm(alarm)
+                msg = f"This is your {time_str} alarm, say cancel to stop"
+                notify(msg, channels=["system", "tts", "telegram"])
+                request_ptt_recording()
+                logger.debug("Alarm: PTT requested – voice loop will open mic on next iteration")
         except Exception as e:
             logger.debug("Alarm loop: %s", e)
         time.sleep(ALARM_POLL_INTERVAL)
@@ -99,6 +112,8 @@ def _on_pomodoro_done(phase: str, duration_sec: int):
 
 def main():
     # Build tool executor and router
+    # When adding a tool: also update gerty/tools/skills_registry.py, frontend/src/skills.ts, COMMANDS.md
+    # See docs/ADDING_TOOLS.md
     ollama = OllamaClient()
     executor = ToolExecutor()
     executor.register(TimeDateTool(), ["time", "date"])
@@ -241,6 +256,10 @@ def main():
                 window.evaluate_js("window.__gertySaveHistory?.()")
             except Exception as e:
                 logger.debug("Voice save after exchange failed: %s", e)
+            try:
+                window.evaluate_js("window.__gertyRefreshAlarmsTimers?.()")
+            except Exception as e:
+                logger.debug("Voice refresh alarms/timers failed: %s", e)
 
         start_voice_loop_thread(
             sync_cb,

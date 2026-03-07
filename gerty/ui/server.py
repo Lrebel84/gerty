@@ -32,8 +32,11 @@ from gerty.rag import (
     query as rag_query,
 )
 from gerty.settings import load as load_settings, save as save_settings
-from gerty.tools.alarms import get_pending_alarms, cancel_all_alarms
-from gerty.tools.timers import get_active_timers, cancel_all_timers
+from gerty.tools.alarms import get_pending_alarms, cancel_all_alarms, cancel_alarm, add_alarm, toggle_alarm_recurring
+from gerty.tools.notes import get_notes, add_note, clear_notes
+from gerty.tools.skills_registry import get_skills
+from gerty.voice.alarm_state import get_sounding_alarm, stop_alarm_sounding
+from gerty.tools.timers import get_active_timers, cancel_all_timers, cancel_timer, add_timer
 from gerty.voice.wake_word import request_ptt_recording, request_voice_cancel, stop_ptt_recording
 
 # Project paths
@@ -131,6 +134,11 @@ def create_app(router):
     @app.post("/api/settings")
     async def post_settings(body: dict = Body(default_factory=dict)):
         return save_settings(body)
+
+    @app.get("/api/skills")
+    async def get_skills_api():
+        """Return skills and tools with example commands. Update gerty/tools/skills_registry.py when adding tools."""
+        return {"skills": get_skills()}
 
     def _pcm_to_wav(pcm: bytes, sample_rate: int) -> bytes:
         """Wrap 16-bit mono PCM in WAV header."""
@@ -393,10 +401,49 @@ def create_app(router):
 
     @app.get("/api/alarms")
     async def list_alarms():
-        return {"alarms": get_pending_alarms()}
+        """Return alarms: future + currently sounding. Triggered alarm stays until user cancels."""
+        sounding = get_sounding_alarm()
+        sounding_id = (sounding.get("id") or sounding.get("datetime")) if sounding else None
+        alarms = get_pending_alarms(include_sounding_id=sounding_id)
+        return {"alarms": alarms, "sounding": sounding}
+
+    @app.post("/api/alarms/dismiss")
+    async def dismiss_alarm():
+        """Stop the currently sounding alarm (manual stop from UI)."""
+        stop_alarm_sounding()
+        return {"ok": True}
+
+    @app.post("/api/alarms")
+    async def post_alarm(body: dict = Body(default_factory=dict)):
+        """Add an alarm. Body: { time: string, label?: string, recurring?: 'daily' }."""
+        time_str = body.get("time", "").strip()
+        if not time_str:
+            return {"added": False, "error": "time required"}
+        label = (body.get("label") or "Alarm").strip()[:50] or "Alarm"
+        recurring = "daily" if body.get("recurring") in (True, "daily", "true") else None
+        try:
+            alarm = add_alarm(time_str, label, recurring=recurring)
+            return {"added": True, "alarm": alarm}
+        except ValueError as e:
+            return {"added": False, "error": str(e)}
+
+    @app.post("/api/alarms/toggle-recurring")
+    async def toggle_alarm_recurring_api(body: dict = Body(default_factory=dict)):
+        """Toggle an alarm between daily and one-time. Body: { id: string }."""
+        alarm_id = body.get("id")
+        if not alarm_id:
+            return {"ok": False, "error": "id required"}
+        result = toggle_alarm_recurring(alarm_id)
+        if result is None:
+            return {"ok": False, "error": "alarm not found"}
+        return {"ok": True, "recurring": result}
 
     @app.post("/api/alarms/cancel")
-    async def cancel_alarms():
+    async def cancel_alarms(body: dict = Body(default_factory=dict)):
+        alarm_id = body.get("id")
+        if alarm_id:
+            ok = cancel_alarm(alarm_id)
+            return {"cancelled": 1 if ok else 0}
         count = cancel_all_alarms()
         return {"cancelled": count}
 
@@ -404,8 +451,49 @@ def create_app(router):
     async def list_timers():
         return {"timers": get_active_timers()}
 
+    @app.post("/api/timers")
+    async def post_timer(body: dict = Body(default_factory=dict)):
+        """Add a timer. Body: { duration_sec: number, label?: string }."""
+        duration_sec = body.get("duration_sec")
+        if duration_sec is None:
+            return {"added": False, "error": "duration_sec required"}
+        try:
+            duration_sec = int(duration_sec)
+        except (TypeError, ValueError):
+            return {"added": False, "error": "duration_sec must be a positive integer"}
+        if duration_sec <= 0:
+            return {"added": False, "error": "duration_sec must be positive"}
+        label = (body.get("label") or "Timer").strip()[:50] or "Timer"
+        try:
+            result = add_timer(duration_sec, label)
+            return {"added": True, **result}
+        except ValueError as e:
+            return {"added": False, "error": str(e)}
+
+    @app.get("/api/notes")
+    async def list_notes():
+        return {"notes": get_notes()}
+
+    @app.post("/api/notes")
+    async def post_note(body: dict = Body(default_factory=dict)):
+        text = body.get("text", "").strip()
+        if not text:
+            return {"added": False}
+        add_note(text)
+        return {"added": True}
+
+    @app.delete("/api/notes")
+    async def delete_notes():
+        count = clear_notes()
+        return {"cleared": count}
+
     @app.post("/api/timers/cancel")
-    async def cancel_timers():
+    async def cancel_timers(body: dict = Body(default_factory=dict)):
+        """Cancel timers. Body: { id?: string } - if id present, cancel that timer; else cancel all."""
+        timer_id = body.get("id")
+        if timer_id:
+            ok = cancel_timer(timer_id)
+            return {"cancelled": 1 if ok else 0}
         count = cancel_all_timers()
         return {"cancelled": count}
 
