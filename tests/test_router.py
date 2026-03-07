@@ -39,6 +39,18 @@ class TestClassifyIntent:
         assert classify_intent("hello") == "chat"
         assert classify_intent("tell me a joke") == "chat"
 
+    def test_calculator_genuine_math(self):
+        assert classify_intent("what is 15% of 80") == "calculator"
+        assert classify_intent("calculate 2 + 2") == "calculator"
+        assert classify_intent("what's 10 times 5") == "calculator"
+        assert classify_intent("2 + 2") == "calculator"
+
+    def test_calculator_not_conversational_questions(self):
+        """Questions starting with 'what's' or 'what is' but with no math go to chat."""
+        assert classify_intent("what's the most controversial episode of South Park?") == "chat"
+        assert classify_intent("What's better, the book or the film?") == "chat"
+        assert classify_intent("what is the capital of France") == "chat"
+
     def test_empty(self):
         assert classify_intent("") == "chat"
         assert classify_intent("   ") == "chat"

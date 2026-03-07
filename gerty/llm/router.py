@@ -11,6 +11,7 @@ from gerty.config import (
 )
 from gerty.llm.ollama_client import OllamaClient
 from gerty.llm.openrouter_client import OpenRouterClient
+from gerty.utils.math_extract import extract_math
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,11 @@ def classify_intent(text: str) -> str:
             return "date"
     for kw in CALC_KEYWORDS:
         if kw in lower or (kw in ("+", "*") and kw in text):
-            return "calculator"
+            # Only route to calculator if we can actually extract a math expression.
+            # Avoids false positives like "what's the most controversial episode?"
+            if extract_math(text) is not None:
+                return "calculator"
+            break  # matched a calc keyword but no math found -> fall through to chat
     for kw in UNIT_KEYWORDS:
         if kw in lower:
             return "units"

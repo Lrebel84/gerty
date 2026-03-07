@@ -6,6 +6,15 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.15] - 2025-03-07
+
+### Calculator Intent Fix
+
+- **Fewer false positives**: Questions like "what's the most controversial episode of South Park?" or "What's better, the book or the film?" no longer route to the calculator. The router now only sends to the calculator when a real math expression can be extracted.
+- **New module**: `gerty.utils.math_extract` – standalone math extraction with no circular dependencies.
+
+---
+
 ## [0.8.14] - 2025-03-07
 
 ### OpenRouter Full Conversation Context
