@@ -1,10 +1,15 @@
-"""Wake word detection: Porcupine (cloud key) or OpenWakeWord (fully local)."""
+"""Wake word detection: Picovoice Porcupine (custom "our Gurt") or openWakeWord."""
 
-import struct
 import threading
-from typing import Callable, Optional
+from pathlib import Path
+from typing import Optional
 
-from gerty.config import PICOVOICE_ACCESS_KEY
+from gerty.config import (
+    PICOVOICE_ACCESS_KEY,
+    PICOVOICE_KEYWORD_PATH,
+    WAKE_WORD_MODEL_PATH,
+    WAKE_WORD_THRESHOLD,
+)
 
 # Thread-safe flags for push-to-talk (when no wake word available)
 _ptt_requested = threading.Event()
@@ -60,89 +65,93 @@ def clear_voice_cancel():
     _voice_cancel_requested.clear()
 
 
-class WakeWordDetector:
-    """Listens for wake word using Porcupine (requires API key)."""
+class PorcupineDetector:
+    """Picovoice Porcupine wake word detection (custom model, e.g. "our Gurt")."""
 
-    def __init__(
-        self,
-        callback: Optional[Callable[[], None]] = None,
-        access_key: str = PICOVOICE_ACCESS_KEY,
-        keyword: str = "computer",
-    ):
-        self.callback = callback if callback is not None else lambda: None
-        self.access_key = access_key
-        self.keyword = keyword
-        self._porcupine = None
-        self._running = False
+    SAMPLE_RATE = 16000
 
-    def _init_porcupine(self):
-        if self._porcupine is not None:
+    def __init__(self, access_key: str, keyword_path: Path):
+        self._access_key = access_key
+        self._keyword_path = Path(keyword_path)
+        self._handle = None
+        self.last_score = 0.0
+
+    def _ensure_loaded(self):
+        if self._handle is not None:
             return
-        if not self.access_key:
-            raise RuntimeError(
-                "PICOVOICE_ACCESS_KEY not set. Get a free key at console.picovoice.ai"
-            )
         import pvporcupine
-
-        self._porcupine = pvporcupine.create(
-            access_key=self.access_key,
-            keywords=[self.keyword],
-            sensitivities=[0.5],
+        self._handle = pvporcupine.create(
+            access_key=self._access_key,
+            keyword_paths=[str(self._keyword_path)],
         )
-
-    def _cleanup(self):
-        if self._porcupine:
-            self._porcupine.delete()
-            self._porcupine = None
 
     @property
     def frame_length(self) -> int:
-        """Samples per frame (for audio capture)."""
-        self._init_porcupine()
-        return self._porcupine.frame_length
+        self._ensure_loaded()
+        return self._handle.frame_length
 
     @property
     def sample_rate(self) -> int:
-        """Required sample rate."""
-        self._init_porcupine()
-        return self._porcupine.sample_rate
+        return self.SAMPLE_RATE
 
     def process_frame(self, pcm: bytes) -> bool:
-        """
-        Process one frame of audio. Returns True if wake word detected.
-        pcm: 16-bit mono audio, length = frame_length * 2 bytes
-        """
-        self._init_porcupine()
-        samples = struct.unpack_from(
-            "h" * self._porcupine.frame_length, pcm
-        )
-        result = self._porcupine.process(samples)
-        return result >= 0
+        """Process one frame. Returns True if wake word detected."""
+        self._ensure_loaded()
+        import numpy as np
+        arr = np.frombuffer(pcm, dtype=np.int16)
+        if len(arr) < self._handle.frame_length:
+            return False
+        if len(arr) > self._handle.frame_length:
+            arr = arr[: self._handle.frame_length]
+        idx = self._handle.process(arr)
+        self.last_score = 1.0 if idx >= 0 else 0.0
+        return idx >= 0
 
     def is_available(self) -> bool:
-        """Check if Porcupine is configured."""
-        return bool(self.access_key)
+        try:
+            self._ensure_loaded()
+            return True
+        except Exception:
+            return False
 
 
 class OpenWakeWordDetector:
-    """Fully local wake word detection using OpenWakeWord (no API key)."""
+    """Fully local wake word detection using openWakeWord (no API key).
+
+    Loads standard .onnx models from the official openWakeWord synthetic training
+    pipeline. See docs/WAKE_WORD_SYNTHETIC_TRAINING.md.
+    """
 
     SAMPLE_RATE = 16000
     FRAME_LENGTH = 1280  # 80ms at 16kHz
 
-    def __init__(self, keyword: str = "hey jarvis"):
+    def __init__(
+        self,
+        keyword: str = "hey jarvis",
+        model_path: Optional[Path] = None,
+        threshold: float = 0.5,
+    ):
         self.keyword = keyword
+        self.model_path = Path(model_path) if model_path else None
+        self._threshold = threshold
         self._model = None
-        self._threshold = 0.5
+        self.last_score = 0.0
 
     def _ensure_loaded(self):
         if self._model is not None:
             return
         try:
             from openwakeword.model import Model
-            import openwakeword
-            openwakeword.utils.download_models()
-            self._model = Model(inference_framework="onnx")
+
+            if self.model_path and self.model_path.is_file():
+                self._model = Model(
+                    wakeword_models=[str(self.model_path)],
+                    inference_framework="onnx",
+                )
+            else:
+                import openwakeword
+                openwakeword.utils.download_models()
+                self._model = Model(inference_framework="onnx")
         except ImportError as e:
             raise ImportError(
                 "openwakeword not installed. Run: pip install openwakeword"
@@ -164,16 +173,21 @@ class OpenWakeWordDetector:
         if len(arr) < self.FRAME_LENGTH:
             return False
         if len(arr) > self.FRAME_LENGTH:
-            arr = arr[:self.FRAME_LENGTH]
+            arr = arr[: self.FRAME_LENGTH]
         pred = self._model.predict(arr)
         for scores in pred.values():
             score = scores[-1] if isinstance(scores, (list, tuple)) and scores else scores
-            if isinstance(score, (int, float)) and score > self._threshold:
-                return True
+            try:
+                s = float(score)
+                self.last_score = s
+                if s > self._threshold:
+                    return True
+            except (TypeError, ValueError):
+                pass
         return False
 
     def is_available(self) -> bool:
-        """Check if OpenWakeWord can be loaded."""
+        """Check if openWakeWord can be loaded."""
         try:
             self._ensure_loaded()
             return True
@@ -184,16 +198,24 @@ class OpenWakeWordDetector:
 def create_wake_detector():
     """
     Create the best available wake detector.
-    Priority: Porcupine (if key) > OpenWakeWord > None (push-to-talk only).
+    Priority: Picovoice (our Gurt) > openWakeWord > PTT only.
     """
-    if PICOVOICE_ACCESS_KEY:
-        try:
-            det = WakeWordDetector(keyword="computer")
-            _ = det.frame_length  # Trigger init to verify it works
-            return det, "porcupine"
-        except Exception:
-            pass
     try:
+        if PICOVOICE_ACCESS_KEY and PICOVOICE_KEYWORD_PATH.is_file():
+            det = PorcupineDetector(PICOVOICE_ACCESS_KEY, PICOVOICE_KEYWORD_PATH)
+            if det.is_available():
+                return det, "picovoice (our Gurt)"
+    except Exception:
+        pass
+    try:
+        if WAKE_WORD_MODEL_PATH.is_file():
+            det = OpenWakeWordDetector(
+                keyword="Gerty",
+                model_path=WAKE_WORD_MODEL_PATH,
+                threshold=WAKE_WORD_THRESHOLD,
+            )
+            if det.is_available():
+                return det, "gerty (openwakeword)"
         det = OpenWakeWordDetector(keyword="hey jarvis")
         if det.is_available():
             return det, "openwakeword"

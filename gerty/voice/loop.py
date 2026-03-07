@@ -13,8 +13,10 @@ from gerty.config import (
     VOSK_MODEL_PATH,
     VOICE_RESPONSE_TIMEOUT,
     VOICE_TTS_PARALLEL,
+    VOICE_WAKE_GRACE_SEC,
 )
 from gerty.settings import load as load_settings
+from gerty.voice.feedback import play_listening_ping, play_processing_ping
 from gerty.voice.wake_word import (
     create_wake_detector,
     consume_ptt_request,
@@ -148,12 +150,15 @@ def run_voice_loop(
     recording_started_at: float | None = None
     capture.start()
 
+    # Signal that voice is active and listening for wake word (or PTT)
     def _status(s: str):
         if on_status_change:
             try:
                 on_status_change(s)
             except Exception as e:
                 logger.debug("Voice status callback failed: %s", e)
+
+    _status("idle")  # Voice ready, listening for wake word (or PTT)
 
     def on_wake():
         nonlocal recording, audio_chunks, recording_started_at
@@ -162,6 +167,7 @@ def run_voice_loop(
         audio_chunks = []
         recording_started_at = time.perf_counter()
         _status("listening")
+        play_listening_ping()
         if vad:
             vad.reset()
 
@@ -174,6 +180,7 @@ def run_voice_loop(
             recording_started_at = None
             return
         _status("processing")
+        play_processing_ping()
         if consume_voice_cancel():
             return
         try:
@@ -405,8 +412,12 @@ def run_voice_loop(
                         logger.debug("VAD chunk failed: %s", vad_err)
                 if not end_detected:
                     end_detected = check_energy_fallback()
+                # Grace period: ignore end-of-speech for first N seconds after wake (gives time to start talking)
+                elapsed = (time.perf_counter() - recording_started_at) if recording_started_at else 0
+                if end_detected and elapsed < VOICE_WAKE_GRACE_SEC:
+                    end_detected = False
                 # Force process after MAX_RECORDING_SEC (VAD may never trigger in noisy environments)
-                if recording_started_at and (time.perf_counter() - recording_started_at) >= MAX_RECORDING_SEC:
+                if recording_started_at and elapsed >= MAX_RECORDING_SEC:
                     end_detected = True
                     logger.info("Voice: max recording duration reached, forcing process")
                 if end_detected and len(audio_chunks) >= max(MIN_SPEECH_CHUNKS, MIN_RECORDING_CHUNKS):

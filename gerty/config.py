@@ -53,8 +53,26 @@ def _parse_telegram_chat_ids() -> list[int]:
 
 TELEGRAM_CHAT_IDS = _parse_telegram_chat_ids()
 
-# Porcupine wake word
-PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY", "")
+# Wake word: Picovoice Porcupine (custom "our Gurt") or openWakeWord
+# Picovoice: try PICOVOICE_ACCESS_KEY or PICOVOICE_API_KEY (some users have the latter)
+PICOVOICE_ACCESS_KEY = os.getenv("PICOVOICE_ACCESS_KEY") or os.getenv("PICOVOICE_API_KEY", "")
+_picovoice_path = os.getenv("PICOVOICE_KEYWORD_PATH", "models/wakeword/our-gurt_en_linux_v4_0_0.ppn")
+PICOVOICE_KEYWORD_PATH = (
+    PROJECT_ROOT / _picovoice_path
+    if not Path(_picovoice_path).is_absolute()
+    else Path(_picovoice_path)
+)
+# openWakeWord fallback (when Picovoice not configured)
+WAKE_WORD_THRESHOLD = float(os.getenv("WAKE_WORD_THRESHOLD", "0.5"))
+_wakeword_path = os.getenv("WAKE_WORD_MODEL_PATH", "models/wakeword/gerty.onnx")
+WAKE_WORD_MODEL_PATH = (
+    PROJECT_ROOT / _wakeword_path
+    if not Path(_wakeword_path).is_absolute()
+    else Path(_wakeword_path)
+)
+# Audio ping feedback: play tone when listening starts / when processing starts
+PING_LISTENING_ENABLED = os.getenv("PING_LISTENING_ENABLED", "1").lower() in ("1", "true", "yes")
+PING_PROCESSING_ENABLED = os.getenv("PING_PROCESSING_ENABLED", "1").lower() in ("1", "true", "yes")
 
 # Speech-to-text backend: faster_whisper, moonshine, vosk, groq, or auto (Groq when WiFi, else local)
 STT_BACKEND = os.getenv("STT_BACKEND", "faster_whisper")
@@ -66,8 +84,10 @@ MOONSHINE_MODEL = os.getenv("MOONSHINE_MODEL", "base")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # VAD (Silero) / energy fallback: min silence before end-of-speech (ms)
-# 700=fastest, 1200=balanced, 2000=noisy environments
-VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "700"))
+# 1000=1s breathing room after you stop talking; 700=snappier, 1500=more relaxed
+VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "1000"))
+# Grace period after wake word: mic stays open this long before we consider "user stopped" (seconds)
+VOICE_WAKE_GRACE_SEC = float(os.getenv("VOICE_WAKE_GRACE_SEC", "1.5"))
 
 # Model paths (resolved from project root)
 _vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.15")

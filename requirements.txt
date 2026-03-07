@@ -1,7 +1,7 @@
 # Gerty - local AI voice assistant
 
 # Voice
-pvporcupine>=3.0.0
+pvporcupine>=4.0.0  # Picovoice wake word (our Gurt); requires PICOVOICE_ACCESS_KEY
 openwakeword>=0.6.0
 vosk>=0.3.45
 silero-vad>=4.0.0

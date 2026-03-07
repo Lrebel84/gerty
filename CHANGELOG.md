@@ -6,6 +6,20 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.13] - 2025-03-07
+
+### Wake Word & Voice UX
+
+#### Picovoice "our Gurt" wake word
+- **Wake word**: "our Gurt" (not "Gerty") – custom Picovoice Porcupine model. Set `PICOVOICE_ACCESS_KEY` in `.env` (free at console.picovoice.ai). Model: `models/wakeword/our-gurt_en_linux_v4_0_0.ppn`.
+- **Grace period**: Mic stays open 1.5s after wake word before considering "user stopped" – gives time to start speaking. Configurable via `VOICE_WAKE_GRACE_SEC`.
+- **Silence before stop**: 1s breathing room after you stop talking before recording ends. Configurable via `VAD_MIN_SILENCE_MS` (default 1000ms).
+
+#### UI
+- **Web inspector removed** – PyWebView no longer launches the debug/inspector window on startup (`debug=False`).
+
+---
+
 ## [0.8.12] - 2025-03-06
 
 ### Voice – Natural TTS & Prompt Fixes
