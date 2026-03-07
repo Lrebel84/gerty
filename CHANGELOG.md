@@ -11,6 +11,20 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.22] - 2025-03-07
+
+### Overlays & Notes UX
+
+#### Overlay mutual exclusivity
+- **One overlay at a time** – Opening Skills, Alarms & Timers, or Notes closes the others. Clicking X returns to chat (no stacking).
+
+#### Notes: delete individual notes
+- **Per-note delete** – Trash button on each note removes that note only. "Clear all" still clears everything.
+- **API:** `DELETE /api/notes/{index}` – remove note at 0-based index
+- **Bridge:** `deleteNote(index)` for PyWebView fallback
+
+---
+
 ## [0.8.21] - 2025-03-07
 
 ### Notes: Voice-added notes now show in overlay

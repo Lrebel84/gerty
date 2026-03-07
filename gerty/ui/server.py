@@ -33,7 +33,7 @@ from gerty.rag import (
 )
 from gerty.settings import load as load_settings, save as save_settings
 from gerty.tools.alarms import get_pending_alarms, cancel_all_alarms, cancel_alarm, add_alarm, toggle_alarm_recurring
-from gerty.tools.notes import get_notes, add_note, clear_notes
+from gerty.tools.notes import get_notes, add_note, clear_notes, delete_note
 from gerty.tools.skills_registry import get_skills
 from gerty.voice.alarm_state import get_sounding_alarm, stop_alarm_sounding
 from gerty.tools.timers import get_active_timers, cancel_all_timers, cancel_timer, add_timer
@@ -482,8 +482,13 @@ def create_app(router):
         add_note(text)
         return {"added": True}
 
+    @app.delete("/api/notes/{index:int}")
+    async def delete_note_at(index: int):
+        ok = delete_note(index)
+        return {"deleted": 1 if ok else 0}
+
     @app.delete("/api/notes")
-    async def delete_notes():
+    async def delete_all_notes():
         count = clear_notes()
         return {"cleared": count}
 

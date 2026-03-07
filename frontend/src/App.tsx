@@ -306,9 +306,21 @@ function App() {
         width={sidebarWidth}
         onResize={handleSidebarResize}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        onSkillsClick={() => setSkillsViewOpen(true)}
-        onAlarmsTimersClick={() => setAlarmsTimersViewOpen(true)}
-        onNotesClick={() => setNotesViewOpen(true)}
+        onSkillsClick={() => {
+          setAlarmsTimersViewOpen(false)
+          setNotesViewOpen(false)
+          setSkillsViewOpen(true)
+        }}
+        onAlarmsTimersClick={() => {
+          setSkillsViewOpen(false)
+          setNotesViewOpen(false)
+          setAlarmsTimersViewOpen(true)
+        }}
+        onNotesClick={() => {
+          setSkillsViewOpen(false)
+          setAlarmsTimersViewOpen(false)
+          setNotesViewOpen(true)
+        }}
         voiceStatus={voiceStatus}
         onSettingsSave={refetchSettings}
         provider={provider}

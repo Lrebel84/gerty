@@ -453,7 +453,27 @@ export function ChatWindow({ messages, onSend, onNewChat, voiceStatus, onVoiceSt
                 ) : (
                   <ul className="space-y-2">
                     {notes.map((n, i) => (
-                      <li key={i} className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)]">• {n}</li>
+                      <li key={i} className="flex items-center gap-2 p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)]">
+                        <span className="flex-1">• {n}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const api = (window as unknown as { pywebview?: { api?: { deleteNote?: (idx: number) => boolean } } }).pywebview?.api
+                            if (api?.deleteNote) {
+                              api.deleteNote(i)
+                              refreshNotes()
+                            } else {
+                              await fetch(`${API_BASE}/notes/${i}`, { method: 'DELETE' })
+                              refreshNotes()
+                            }
+                          }}
+                          className="p-1 rounded text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/20 shrink-0"
+                          title="Delete note"
+                          aria-label="Delete note"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </li>
                     ))}
                   </ul>
                 )}

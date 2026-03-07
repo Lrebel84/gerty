@@ -2,7 +2,7 @@
 
 from gerty.llm.router import Router
 from gerty.pipeline import chat_pipeline_sync
-from gerty.tools.notes import get_notes
+from gerty.tools.notes import get_notes, delete_note as delete_note_by_index
 from gerty.voice.wake_word import request_ptt_recording, stop_ptt_recording
 
 
@@ -38,5 +38,9 @@ def create_bridge(router: Router):
         def getNotes(self) -> list[str]:
             """Return notes list. Bridge fallback when fetch blocks in Qt WebEngine."""
             return get_notes()
+
+        def deleteNote(self, index: int) -> bool:
+            """Delete note at 0-based index. Bridge fallback when fetch blocks."""
+            return delete_note_by_index(index)
 
     return GertyAPI()
