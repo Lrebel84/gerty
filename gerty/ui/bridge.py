@@ -2,6 +2,7 @@
 
 from gerty.llm.router import Router
 from gerty.pipeline import chat_pipeline_sync
+from gerty.tools.notes import get_notes
 from gerty.voice.wake_word import request_ptt_recording, stop_ptt_recording
 
 
@@ -33,5 +34,9 @@ def create_bridge(router: Router):
         def stopVoiceRecording(self) -> None:
             """Stop push-to-talk recording (release mic button)."""
             stop_ptt_recording()
+
+        def getNotes(self) -> list[str]:
+            """Return notes list. Bridge fallback when fetch blocks in Qt WebEngine."""
+            return get_notes()
 
     return GertyAPI()

@@ -11,6 +11,16 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.21] - 2025-03-07
+
+### Notes: Voice-added notes now show in overlay
+
+- **Global notes polling** – Notes poll every 2s (like alarm check), not only when overlay is open. Voice-added notes appear within 2s.
+- **Bridge fallback** – `getNotes()` on PyWebView bridge bypasses Qt WebEngine fetch blocking. Frontend uses bridge when available, falls back to fetch in browser.
+- Notes added by voice ("remind me to X", "make a note X") now reliably appear in the notes window.
+
+---
+
 ## [0.8.20] - 2025-03-07
 
 ### Alarms & Timers Overhaul, Recurring Alarms, Voice UX

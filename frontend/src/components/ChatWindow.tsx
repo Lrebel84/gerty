@@ -134,28 +134,54 @@ export function ChatWindow({ messages, onSend, onNewChat, voiceStatus, onVoiceSt
     }
   }, [messages.length, alarmsTimersViewOpen])
 
-  // Expose refresh for voice completion - voice updates messages via bridge, so we need explicit trigger
-  useEffect(() => {
-    const win = window as unknown as { __gertyRefreshAlarmsTimers?: () => void }
-    win.__gertyRefreshAlarmsTimers = () => refreshAlarmsTimers()
-    return () => { delete win.__gertyRefreshAlarmsTimers }
-  }, [])
-
-  useEffect(() => {
-    if (notesViewOpen) {
-      fetch(`${API_BASE}/notes`)
-        .then((r) => (r.ok ? r.json() : { notes: [] }))
-        .then((d) => setNotes(d.notes || []))
-        .catch(() => setNotes([]))
-    }
-  }, [notesViewOpen])
-
   const refreshNotes = () => {
+    // Bridge fallback: Qt WebEngine can block fetch; bridge bypasses it
+    const api = (window as unknown as { pywebview?: { api?: { getNotes?: () => string[] | Promise<string[]> } } }).pywebview?.api
+    if (api?.getNotes) {
+      Promise.resolve(api.getNotes())
+        .then((notes) => setNotes(Array.isArray(notes) ? notes : []))
+        .catch(() => fetchNotesFallback())
+    } else {
+      fetchNotesFallback()
+    }
+  }
+  const fetchNotesFallback = () => {
     fetch(`${API_BASE}/notes`)
       .then((r) => (r.ok ? r.json() : { notes: [] }))
       .then((d) => setNotes(d.notes || []))
       .catch(() => setNotes([]))
   }
+
+  const refreshNotesRef = useRef(refreshNotes)
+  refreshNotesRef.current = refreshNotes
+
+  // Global notes poll (like alarm check) - ensures notes stay fresh when added by voice
+  useEffect(() => {
+    refreshNotes()
+    const iv = setInterval(refreshNotes, 2000)
+    return () => clearInterval(iv)
+  }, [])
+
+  useEffect(() => {
+    if (notesViewOpen) {
+      refreshNotes()
+    }
+  }, [notesViewOpen])
+
+  // Refresh when messages change (e.g. after voice/chat adds a note)
+  useEffect(() => {
+    if (notesViewOpen && messages.length > 0) {
+      refreshNotes()
+    }
+  }, [messages.length, notesViewOpen])
+
+  // Expose refresh for voice completion - use ref to avoid stale closure
+  useEffect(() => {
+    const win = window as unknown as { __gertyRefreshAlarmsTimers?: () => void; __gertyRefreshNotes?: () => void }
+    win.__gertyRefreshAlarmsTimers = () => refreshAlarmsTimers()
+    win.__gertyRefreshNotes = () => refreshNotesRef.current?.()
+    return () => { delete win.__gertyRefreshAlarmsTimers; delete win.__gertyRefreshNotes }
+  }, [])
 
   useEffect(() => {
     const checkAlarm = async () => {
