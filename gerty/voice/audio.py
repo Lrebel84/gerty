@@ -88,6 +88,14 @@ class AudioCapture:
         data, _ = self._stream.read(self.block_size)
         return data.tobytes()
 
+    def flush(self, blocks: int = 10) -> None:
+        """Read and discard buffered audio. Call before auto-listen to avoid echo pickup."""
+        for _ in range(blocks):
+            try:
+                self.read()
+            except Exception:
+                break
+
     def stream_blocks(self) -> Iterator[bytes]:
         """Generator yielding audio blocks until stopped."""
         self.start()

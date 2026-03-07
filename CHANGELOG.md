@@ -6,6 +6,24 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.16] - 2025-03-07
+
+### Voice Auto-Listen Loop Fixes
+
+Fixes the mic getting stuck in a loop (AI responds → background TV/noise picked up → AI replies to noise → repeat) with no way to stop without closing the app.
+
+#### Conversation end phrases
+- **Say "bye", "thanks", "stop", etc.** – Go to idle without responding. Phrases: bye, thanks, thank you, cool, ok, stop, end, finish, done, enough, quit, exit, "that's all", "stop responding", etc.
+- **Punctuation normalization** – STT often returns "thanks." or "stop!"; these now match correctly.
+
+#### Wake word to stop
+- **"our Gurt" during auto-listen** – When the mic auto-opened after a response, saying the wake word now goes to idle instead of starting a new recording. Escape the loop without closing the app.
+
+#### Longer listen for dominant voice
+- **2-second grace when auto-opened** – Mic stays open at least 2s after a response before considering silence as end-of-speech. Gives time to speak over background noise. Config: `VOICE_AUTO_LISTEN_GRACE_SEC` (default 2.0).
+
+---
+
 ## [0.8.15] - 2025-03-07
 
 ### Calculator Intent Fix

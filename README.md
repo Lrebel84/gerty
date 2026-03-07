@@ -5,7 +5,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 ## Features
 
 - **Chat UI**: Modern dark-themed desktop app with chat window and extensible sidebar
-- **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop.
+- **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop. Say **"bye"**, **"thanks"**, **"stop"** to end the conversation; say the wake word during auto-listen to stop listening.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
 - **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro
@@ -87,7 +87,7 @@ Voice is **fully local** by default – no API keys required:
 - **STT (speech-to-text)**: faster-whisper (default), **Moonshine** (variable-length, ~5x faster on short commands), Vosk (legacy), Groq (cloud, 216x real-time), or Auto. Moonshine: `pip install "transformers[torch]"`, then Settings → Voice – Speech recognition → Moonshine. For CPU: use `tiny` or Groq.
 - **Vosk fallback**: If faster-whisper hangs (e.g. under PyWebView), voice automatically falls back to Vosk.
 - **TTS (text-to-speech)**: Piper (fast) or Kokoro-82M (ElevenLabs-like) – Settings → Voice – Text-to-speech. Choose a voice and click **Save** to set it as default.
-- **Wake word** (optional): Say **"our Gurt"** (not "Gerty") to activate – Picovoice custom model. Set `PICOVOICE_ACCESS_KEY` in `.env` (free at console.picovoice.ai), or `pip install openwakeword` for "hey jarvis"
+- **Wake word** (optional): Say **"our Gurt"** (not "Gerty") to activate – Picovoice custom model. Set `PICOVOICE_ACCESS_KEY` in `.env` (free at console.picovoice.ai), or `pip install openwakeword` for "hey jarvis". During auto-listen (after a response), say the wake word again to stop listening.
 - **Settings → Voice – Speech recognition (STT)**: Choose STT backend and faster-whisper model (tiny, base, small, medium, large-v3). Restart app after changing.
 - **Voice + OpenRouter + Groq**: Select **OpenRouter** in the chat header (Local/OpenRouter toggle) for voice to use cloud LLM. For Groq STT: Settings → Voice → Speech recognition → **Groq** or **Auto** (Auto uses Groq when `GROQ_API_KEY` and network available). Add both keys to `.env`. Restart after changing STT.
 

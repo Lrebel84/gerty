@@ -88,6 +88,10 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "1000"))
 # Grace period after wake word: mic stays open this long before we consider "user stopped" (seconds)
 VOICE_WAKE_GRACE_SEC = float(os.getenv("VOICE_WAKE_GRACE_SEC", "1.5"))
+# Delay after TTS before auto-opening mic (reduces acoustic echo pickup)
+VOICE_AUTO_LISTEN_SETTLE_SEC = float(os.getenv("VOICE_AUTO_LISTEN_SETTLE_SEC", "0.2"))
+# Grace period when auto-opened after response: mic stays open longer (2s) to catch dominant voice
+VOICE_AUTO_LISTEN_GRACE_SEC = float(os.getenv("VOICE_AUTO_LISTEN_GRACE_SEC", "2.0"))
 
 # Model paths (resolved from project root)
 _vosk_path = os.getenv("VOSK_MODEL_PATH", "models/vosk/vosk-model-small-en-us-0.15")
