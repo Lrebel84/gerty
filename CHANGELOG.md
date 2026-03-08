@@ -11,6 +11,43 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.23] - 2025-03-07
+
+### Deep Linux System Agency
+
+Gerty can now control your Linux system: media, audio, app launching, system commands, and diagnostics.
+
+#### System Command Tool (opt-in)
+- **Lock, suspend, reboot, shutdown** – Allowlist-only, no shell, no user input passed to commands
+- Set `GERTY_SYSTEM_TOOLS=1` in `.env` to enable
+- Commands: `loginctl lock-session`, `systemctl suspend/reboot/poweroff`
+
+#### Media & Audio Control
+- **playerctl** – Play, pause, play-pause, next, previous, stop (Spotify, VLC, Firefox, etc.)
+- **wpctl** (PipeWire) or **pamixer** (PulseAudio) – Mute, unmute, volume up/down
+- No opt-in; works when `playerctl` and `wpctl`/`pamixer` are installed
+
+#### App Launching (opt-in)
+- Parse `.desktop` files from XDG dirs; launch by name
+- "Open Firefox", "Launch VS Code", "start Terminal"
+- Uses `gtk-launch` or `gio launch`
+- Requires `GERTY_SYSTEM_TOOLS=1`
+
+#### System Monitoring
+- **psutil** – CPU, RAM, top processes
+- "Why are my fans spinning", "what's using CPU", "system status"
+
+#### Config & deps
+- `GERTY_SYSTEM_TOOLS` – Enables system commands and app launch (default off)
+- `psutil` in requirements.txt
+- System deps: `playerctl`, `libgtk-3-0`; `wpctl` (PipeWire) or `pamixer` (PulseAudio)
+
+#### Docs
+- COMMANDS.md – System, Media, App Launch, Sys Monitor sections
+- README – System deps, GERTY_SYSTEM_TOOLS
+
+---
+
 ## [0.8.22] - 2025-03-07
 
 ### Overlays & Notes UX

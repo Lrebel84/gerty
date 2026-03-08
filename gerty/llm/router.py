@@ -31,7 +31,7 @@ TIMER_KEYWORDS = [
 CALC_KEYWORDS = ["calculate", "calculator", "what is", "what's", "compute", "+", "*", "% of"]
 UNIT_KEYWORDS = ["convert", "kilograms to", "miles to", "fahrenheit to", "celsius to"]
 RANDOM_KEYWORDS = ["flip", "coin", "roll", "dice", "random", "pick", "choose"]
-NOTES_KEYWORDS = ["note:", "note ", "notes", "remember", "add note"]
+NOTES_KEYWORDS = ["note:", "note ", "notes", "remember", "add note", "remind me", "make a note", "make note"]
 STOPWATCH_KEYWORDS = ["stopwatch", "how long has", "elapsed"]
 TIMEZONE_KEYWORDS = ["time in", "timezone", "time zone", "what time in"]
 WEATHER_KEYWORDS = ["weather", "forecast", "temperature"]
@@ -45,6 +45,11 @@ RAG_KEYWORDS = [
 ]
 SEARCH_KEYWORDS = ["search for", "search ", "look up", "google"]
 POMODORO_KEYWORDS = ["pomodoro"]
+# System tools - check before generic chat
+APP_LAUNCH_PREFIXES = ["open ", "launch ", "start ", "run "]
+MEDIA_KEYWORDS = ["play", "pause", "skip", "next track", "previous", "mute", "unmute", "volume up", "volume down"]
+SYSTEM_CMD_KEYWORDS = ["lock screen", "lock my screen", "lock the screen", "suspend", "reboot", "shut down", "power off"]
+SYS_MONITOR_KEYWORDS = ["why are my fans", "cpu usage", "memory usage", "what's using", "system status", "diagnose"]
 COMPLEX_KEYWORDS = [
     "explain", "write code", "program", "analyze", "compare",
     "summarize", "translate", "complex", "detailed",
@@ -57,6 +62,19 @@ def classify_intent(text: str) -> str:
     if not lower:
         return "chat"
 
+    # App launch: "open firefox", "launch vs code" - check before media (open/start could overlap)
+    for prefix in APP_LAUNCH_PREFIXES:
+        if lower.startswith(prefix) and len(lower) > len(prefix) + 1:
+            return "app_launch"
+    for kw in SYS_MONITOR_KEYWORDS:
+        if kw in lower:
+            return "sys_monitor"
+    for kw in MEDIA_KEYWORDS:
+        if kw in lower:
+            return "media_control"
+    for kw in SYSTEM_CMD_KEYWORDS:
+        if kw in lower:
+            return "system_command"
     # Check timer before time (timer contains "time")
     for kw in TIMER_KEYWORDS:
         if kw in lower:
@@ -166,7 +184,7 @@ class Router:
         intent = classify_intent(message)
 
         # Tool intents: delegate to tool executor
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor")
         if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
 
@@ -211,7 +229,7 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor")
         if intent in tool_intents and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result

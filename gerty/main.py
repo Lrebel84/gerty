@@ -35,13 +35,17 @@ from gerty.notifications import notify
 from gerty.pipeline import chat_pipeline_sync
 from gerty.tools import (
     AlarmsTool,
+    AppLaunchTool,
     CalculatorTool,
+    MediaControlTool,
     NotesTool,
     PomodoroTool,
     RandomTool,
     RagTool,
     SearchTool,
     StopwatchTool,
+    SysMonitorTool,
+    SystemCommandTool,
     TimersTool,
     TimeDateTool,
     TimezoneTool,
@@ -129,6 +133,10 @@ def main():
     executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
     executor.register(PomodoroTool())
+    executor.register(MediaControlTool())
+    executor.register(SysMonitorTool())
+    executor.register(SystemCommandTool())
+    executor.register(AppLaunchTool())
 
     router = Router(tool_executor=executor.execute)
 
@@ -260,6 +268,10 @@ def main():
                 window.evaluate_js("window.__gertyRefreshAlarmsTimers?.()")
             except Exception as e:
                 logger.debug("Voice refresh alarms/timers failed: %s", e)
+            try:
+                window.evaluate_js("window.__gertyRefreshNotes?.()")
+            except Exception as e:
+                logger.debug("Voice refresh notes failed: %s", e)
 
         start_voice_loop_thread(
             sync_cb,

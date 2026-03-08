@@ -8,8 +8,8 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop. Say **"bye"**, **"thanks"**, **"stop"** to end the conversation; say the wake word during auto-listen to stop listening.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
-- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro
-- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. On-demand only (no automatic injection) for fast chat.
+- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro, system commands, media/audio, app launching, system monitoring
+- **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search` for the search tool
 
 ## Setup
@@ -20,6 +20,12 @@ For the desktop UI, pywebview uses Qt6. Install XCB platform plugin:
 
 ```bash
 sudo apt install libxcb-cursor0 libxcb-xinerama0
+```
+
+For system tools (media, app launch): `playerctl` (media control), `wpctl` (PipeWire, usually preinstalled) or `pamixer` (PulseAudio), and `gtk-launch` (libgtk-3-0):
+
+```bash
+sudo apt install playerctl libgtk-3-0
 ```
 
 ### Python setup
@@ -45,6 +51,7 @@ cp .env.example .env
 # - OPENROUTER_API_KEY for cloud LLM
 # - TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS for mobile
 # - PICOVOICE_ACCESS_KEY for wake word (free at console.picovoice.ai)
+# - GERTY_SYSTEM_TOOLS=1 for system commands and app launching (lock, suspend, open apps)
 ```
 
 ### 3. Start Ollama (for local LLM)
@@ -87,7 +94,7 @@ Voice is **fully local** by default – no API keys required:
 - **STT (speech-to-text)**: faster-whisper (default), **Moonshine** (variable-length, ~5x faster on short commands), Vosk (legacy), Groq (cloud, 216x real-time), or Auto. Moonshine: `pip install "transformers[torch]"`, then Settings → Voice – Speech recognition → Moonshine. For CPU: use `tiny` or Groq.
 - **Vosk fallback**: If faster-whisper hangs (e.g. under PyWebView), voice automatically falls back to Vosk.
 - **TTS (text-to-speech)**: Piper (fast) or Kokoro-82M (ElevenLabs-like) – Settings → Voice – Text-to-speech. Choose a voice and click **Save** to set it as default.
-- **Wake word** (optional): Say **"our Gurt"** (not "Gerty") to activate – Picovoice custom model. Set `PICOVOICE_ACCESS_KEY` in `.env` (free at console.picovoice.ai), or `pip install openwakeword` for "hey jarvis". During auto-listen (after a response), say the wake word again to stop listening.
+- **Wake word** (optional): Say **"our Gurt"** (not "Gerty") to activate – Picovoice custom model. Set `PICOVOICE_ACCESS_KEY` in `.env` (free at console.picovoice.ai). During auto-listen (after a response), say the wake word again to stop listening.
 - **Settings → Voice – Speech recognition (STT)**: Choose STT backend and faster-whisper model (tiny, base, small, medium, large-v3). Restart app after changing.
 - **Voice + OpenRouter + Groq**: Select **OpenRouter** in the chat header (Local/OpenRouter toggle) for voice to use cloud LLM. For Groq STT: Settings → Voice → Speech recognition → **Groq** or **Auto** (Auto uses Groq when `GROQ_API_KEY` and network available). Add both keys to `.env`. Restart after changing STT.
 
@@ -131,13 +138,14 @@ cd frontend && npm run build && cd ..
 ```
 gerty/
 ├── PERFORMANCE.md       # Benchmarks, first-response times, tips
+├── docs/                # ALARM.md, RAG_MEMORY.md; archive/ for old docs
 ├── gerty/
 │   ├── main.py          # Entry point
 │   ├── config.py        # Environment config
 │   ├── llm/             # Ollama, OpenRouter, router
 │   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
-│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro, system, media, app_launch, sys_monitor
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/

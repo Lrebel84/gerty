@@ -124,6 +124,9 @@ RAG_SUMMARIZE_THRESHOLD = int(os.getenv("RAG_SUMMARIZE_THRESHOLD", "15"))
 # Max distance for relevance (Chroma uses cosine distance; lower = better; typical keep < 0.8)
 RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.9"))
 
+# System tools (lock, suspend, reboot, app launch, media, etc.) - opt-in for security
+GERTY_SYSTEM_TOOLS = os.getenv("GERTY_SYSTEM_TOOLS", "0").lower() in ("1", "true", "yes")
+
 # Server
 SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 ALARM_POLL_INTERVAL = int(os.getenv("ALARM_POLL_INTERVAL", "5"))

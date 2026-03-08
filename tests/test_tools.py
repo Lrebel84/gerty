@@ -10,6 +10,10 @@ from gerty.tools.alarms import AlarmsTool, _parse_alarm_time, _parse_alarm_label
 from gerty.tools.timers import add_timer, cancel_timer, get_active_timers, cancel_all_timers
 from gerty.tools.number_words import normalize_time_words
 from gerty.tools.weather import _extract_city
+from gerty.tools.notes import _extract_note_from_message
+from gerty.tools.system_command import _classify_system_intent
+from gerty.tools.media_control import _classify_media_intent
+from gerty.tools.app_launch import _extract_app_name
 
 
 class TestNumberWords:
@@ -187,6 +191,27 @@ class TestAddTimer:
             add_timer(-5, "Test")
 
 
+class TestNoteExtraction:
+    def test_remind_me_to(self):
+        assert _extract_note_from_message("remind me to call mom", "remind me to call mom") == "call mom"
+        assert _extract_note_from_message("Remind me to buy milk", "remind me to buy milk") == "buy milk"
+
+    def test_remember_to(self):
+        assert _extract_note_from_message("remember to call mom", "remember to call mom") == "call mom"
+        assert _extract_note_from_message("remember buy eggs", "remember buy eggs") == "buy eggs"
+
+    def test_make_a_note(self):
+        assert _extract_note_from_message("make a note buy milk", "make a note buy milk") == "buy milk"
+        assert _extract_note_from_message("make a note: pick up dry cleaning", "make a note: pick up dry cleaning") == "pick up dry cleaning"
+
+    def test_note_prefix(self):
+        assert _extract_note_from_message("note: buy milk", "note: buy milk") == "buy milk"
+        assert _extract_note_from_message("add note get groceries", "add note get groceries") == "get groceries"
+
+    def test_no_match(self):
+        assert _extract_note_from_message("what's the weather", "what's the weather") is None
+
+
 class TestWeatherExtraction:
     def test_forecast_for_city(self):
         assert _extract_city("what's the weather forecast for sheffield this afternoon") == "sheffield"
@@ -198,3 +223,50 @@ class TestWeatherExtraction:
 
     def test_weather_for(self):
         assert _extract_city("weather for london") == "london"
+
+
+class TestSystemCommandIntent:
+    def test_lock(self):
+        assert _classify_system_intent("lock my screen") == "lock"
+        assert _classify_system_intent("lock screen") == "lock"
+
+    def test_suspend(self):
+        assert _classify_system_intent("suspend the computer") == "suspend"
+        assert _classify_system_intent("put to sleep") == "suspend"
+
+    def test_reboot(self):
+        assert _classify_system_intent("reboot") == "reboot"
+        assert _classify_system_intent("restart computer") == "reboot"
+
+    def test_shutdown(self):
+        assert _classify_system_intent("shut down") == "shutdown"
+        assert _classify_system_intent("power off") == "shutdown"
+
+    def test_no_match(self):
+        assert _classify_system_intent("what time is it") is None
+
+
+class TestMediaControlIntent:
+    def test_media(self):
+        assert _classify_media_intent("play music") == "media_play"
+        assert _classify_media_intent("pause") == "media_pause"
+        assert _classify_media_intent("skip") == "media_next"
+        assert _classify_media_intent("mute") == "audio_mute"
+        assert _classify_media_intent("volume up") == "audio_volume_up"
+
+
+class TestAppLaunchExtraction:
+    def test_open(self):
+        assert _extract_app_name("open firefox") == "firefox"
+        assert _extract_app_name("open Firefox") == "Firefox"
+
+    def test_launch(self):
+        assert _extract_app_name("launch VS Code") == "code"  # normalized for .desktop lookup
+        assert _extract_app_name("launch terminal") == "terminal"
+
+    def test_vs_code_normalized(self):
+        assert _extract_app_name("open vs code") == "code"
+        assert _extract_app_name("launch visual studio code") == "code"
+
+    def test_no_match(self):
+        assert _extract_app_name("what time is it") is None

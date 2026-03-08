@@ -55,6 +55,34 @@ class TestClassifyIntent:
         assert classify_intent("") == "chat"
         assert classify_intent("   ") == "chat"
 
+    def test_app_launch(self):
+        assert classify_intent("open firefox") == "app_launch"
+        assert classify_intent("launch VS Code") == "app_launch"
+        assert classify_intent("start terminal") == "app_launch"
+
+    def test_media_control(self):
+        assert classify_intent("play music") == "media_control"
+        assert classify_intent("pause") == "media_control"
+        assert classify_intent("mute") == "media_control"
+        assert classify_intent("volume up") == "media_control"
+
+    def test_system_command(self):
+        assert classify_intent("lock my screen") == "system_command"
+        assert classify_intent("suspend") == "system_command"
+        assert classify_intent("reboot") == "system_command"
+        assert classify_intent("shut down") == "system_command"
+
+    def test_sys_monitor(self):
+        assert classify_intent("why are my fans spinning") == "sys_monitor"
+        assert classify_intent("what's using CPU") == "sys_monitor"
+        assert classify_intent("system status") == "sys_monitor"
+
+    def test_notes_phrasings(self):
+        assert classify_intent("remind me to call mom") == "notes"
+        assert classify_intent("remember to buy milk") == "notes"
+        assert classify_intent("make a note get groceries") == "notes"
+        assert classify_intent("note: buy eggs") == "notes"
+
 
 class TestParseTimerDuration:
     def test_minutes(self):

@@ -9,6 +9,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Utilities | Calculator, unit conversion, random, notes |
 | Info | Weather, web search |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
+| System | System commands, media & audio, app launching, system monitoring |
 
 ---
 
@@ -101,9 +102,11 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 | Action | Example |
 |--------|---------|
-| Add note | "note: buy milk" / "remember to call mom" |
+| Add note | "note: buy milk" / "remember to call mom" / "remind me to X" / "make a note X" |
 | List notes | "list notes" / "show notes" |
 | Clear all | "clear notes" / "delete notes" |
+
+*Voice: "remind me to call mom", "remember to buy milk", "make a note get groceries"*
 
 *Notes are saved in `data/notes.txt`*
 
@@ -160,6 +163,57 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Enable RAG tool | Settings → Knowledge base → "Enable RAG" (required to use the tool) |
 
 *Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Enable RAG in Settings. Long-term memory (Settings toggle) extracts facts from chat. Say "check my docs for X" or "search my files for Y" to query documents and memory. On-demand only—no automatic injection. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).*
+
+---
+
+---
+
+## System Commands (opt-in)
+
+*Requires `GERTY_SYSTEM_TOOLS=1` in `.env`*
+
+| Action | Example |
+|--------|---------|
+| Lock screen | "lock my screen" / "lock screen" |
+| Suspend | "suspend" / "sleep" / "put to sleep" |
+| Reboot | "reboot" / "restart" |
+| Shut down | "shut down" / "power off" |
+
+---
+
+## Media & Audio
+
+| Action | Example |
+|--------|---------|
+| Play / Pause | "play" / "pause" / "play pause" |
+| Skip | "skip" / "next track" |
+| Previous | "previous track" |
+| Mute / Unmute | "mute" / "unmute" |
+| Volume | "volume up" / "volume down" |
+
+*Requires: `playerctl` (media), `wpctl` (PipeWire) or `pamixer` (PulseAudio) for audio. Install: `sudo apt install playerctl`*
+
+---
+
+## App Launching (opt-in)
+
+*Requires `GERTY_SYSTEM_TOOLS=1` in `.env`*
+
+| Action | Example |
+|--------|---------|
+| Open app | "open Firefox" / "launch VS Code" / "start Terminal" |
+
+*Parses `.desktop` files from `/usr/share/applications` and `~/.local/share/applications`. Requires `gtk-launch` or `gio`.*
+
+---
+
+## System Monitoring
+
+| Action | Example |
+|--------|---------|
+| Diagnose | "why are my fans spinning" / "what's using CPU" / "system status" |
+
+*Uses psutil. Install: `pip install psutil`*
 
 ---
 

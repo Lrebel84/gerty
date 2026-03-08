@@ -79,7 +79,7 @@ SKILLS: list[SkillEntry] = [
         "category": "Utilities",
         "name": "Notes",
         "description": "Save and recall notes",
-        "examples": ["note: buy milk", "remember to call mom", "list notes", "clear notes"],
+        "examples": ["remind me to call mom", "remember to buy milk", "make a note get groceries", "list notes", "clear notes"],
     },
     # Info
     {
@@ -100,6 +100,31 @@ SKILLS: list[SkillEntry] = [
         "name": "RAG (documents + memory)",
         "description": "Search your files and remembered facts",
         "examples": ["check my docs for X", "search my files for Y", "what do my files say about Z"],
+    },
+    # System (Linux)
+    {
+        "category": "System",
+        "name": "System commands",
+        "description": "Lock screen, suspend, reboot, shutdown (opt-in)",
+        "examples": ["lock my screen", "suspend", "reboot", "shut down"],
+    },
+    {
+        "category": "System",
+        "name": "Media & audio",
+        "description": "Play, pause, skip, mute, volume",
+        "examples": ["play", "pause", "skip", "mute", "volume up"],
+    },
+    {
+        "category": "System",
+        "name": "App launching",
+        "description": "Open applications by name",
+        "examples": ["open Firefox", "launch VS Code", "start Terminal"],
+    },
+    {
+        "category": "System",
+        "name": "System monitoring",
+        "description": "CPU, RAM, top processes",
+        "examples": ["why are my fans spinning", "what's using CPU", "system status"],
     },
 ]
 

@@ -14,6 +14,10 @@ from gerty.tools.weather import WeatherTool
 from gerty.tools.rag_tool import RagTool
 from gerty.tools.search import SearchTool
 from gerty.tools.pomodoro import PomodoroTool
+from gerty.tools.system_command import SystemCommandTool
+from gerty.tools.media_control import MediaControlTool
+from gerty.tools.app_launch import AppLaunchTool
+from gerty.tools.sys_monitor import SysMonitorTool
 
 __all__ = [
     "Tool",
@@ -31,4 +35,8 @@ __all__ = [
     "RagTool",
     "SearchTool",
     "PomodoroTool",
+    "SystemCommandTool",
+    "MediaControlTool",
+    "AppLaunchTool",
+    "SysMonitorTool",
 ]
