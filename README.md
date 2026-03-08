@@ -8,7 +8,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop. Say **"bye"**, **"thanks"**, **"stop"** to end the conversation; say the wake word during auto-listen to stop listening.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
-- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro, system commands, media/audio, app launching, system monitoring
+- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search` for the search tool
 
@@ -71,6 +71,14 @@ OLLAMA_TEMPERATURE=0.1           # Factual responses (reduces hallucinations)
 ```
 
 For complex tasks: `OLLAMA_REASONING_MODEL=deepseek-r1:7b`. Check `ollama list` for available models.
+
+**Screen vision (optional):** For "what am I looking at?" and screen analysis:
+
+```bash
+ollama pull moondream
+```
+
+Set `OLLAMA_VISION_MODEL=moondream` in `.env` (default). For better quality: `ollama pull qwen2.5vl:7b` and `OLLAMA_VISION_MODEL=qwen2.5vl:7b`. Hotkey: `Ctrl+Shift+S`.
 
 ### 4. RAG Knowledge Base (optional)
 
@@ -145,7 +153,7 @@ gerty/
 │   ├── llm/             # Ollama, OpenRouter, router
 │   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
-│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro, system, media, app_launch, sys_monitor
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro, system, media, app_launch, sys_monitor, screen_vision
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/

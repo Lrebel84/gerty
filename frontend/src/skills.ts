@@ -24,6 +24,7 @@ export const SKILLS: Skill[] = [
   { category: "Info", name: "Weather", description: "Current weather by city", examples: ["weather in London", "forecast for Tokyo"] },
   { category: "Info", name: "Web search", description: "Search the web (DuckDuckGo)", examples: ["search for Python tutorial", "look up current events"] },
   { category: "Knowledge", name: "RAG (documents + memory)", description: "Search your files and remembered facts", examples: ["check my docs for X", "search my files for Y", "what do my files say about Z"] },
+  { category: "Vision", name: "Screen vision", description: "Describe or analyze what's on your screen", examples: ["what am I looking at", "what's on screen", "extract the code from this", "describe my screen"] },
   { category: "System", name: "System commands", description: "Lock screen, suspend, reboot, shutdown (opt-in)", examples: ["lock my screen", "suspend", "reboot", "shut down"] },
   { category: "System", name: "Media & audio", description: "Play, pause, skip, mute, volume", examples: ["play", "pause", "skip", "mute", "volume up"] },
   { category: "System", name: "App launching", description: "Open applications by name", examples: ["open Firefox", "launch VS Code", "start Terminal"] },

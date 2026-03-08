@@ -291,6 +291,24 @@ function App() {
     }
   }
 
+  const handleSendRef = useRef(handleSend)
+  handleSendRef.current = handleSend
+
+  // Hotkey: Ctrl+Shift+S or Meta+Shift+S to ask "what am I looking at?"
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 's') {
+        const el = document.activeElement as HTMLElement | null
+        const tag = el?.tagName?.toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return
+        e.preventDefault()
+        handleSendRef.current?.('what am I looking at')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   const handleSidebarResize = (w: number) => {
     const clamped = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, w))
     setSidebarWidth(clamped)

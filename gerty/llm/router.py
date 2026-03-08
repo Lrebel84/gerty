@@ -50,6 +50,24 @@ APP_LAUNCH_PREFIXES = ["open ", "launch ", "start ", "run "]
 MEDIA_KEYWORDS = ["play", "pause", "skip", "next track", "previous", "mute", "unmute", "volume up", "volume down"]
 SYSTEM_CMD_KEYWORDS = ["lock screen", "lock my screen", "lock the screen", "suspend", "reboot", "shut down", "power off"]
 SYS_MONITOR_KEYWORDS = ["why are my fans", "cpu usage", "memory usage", "what's using", "system status", "diagnose"]
+# Use lowercase: we match with "kw in lower" (lowercased message)
+SCREEN_VISION_KEYWORDS = [
+    "what am i looking at",
+    "what am i looking",  # STT often drops "at"
+    "what's on screen",
+    "describe my screen",
+    "extract code",
+    "what do you see",
+    "what do i see",  # voice variation
+    "screenshot",
+    "look at my screen",
+    "what's on my screen",
+    "describe the screen",
+    "extract the code",
+    "code from this",
+    "what is on screen",
+    "what can i see",  # "what can I see?"
+]
 COMPLEX_KEYWORDS = [
     "explain", "write code", "program", "analyze", "compare",
     "summarize", "translate", "complex", "detailed",
@@ -66,6 +84,9 @@ def classify_intent(text: str) -> str:
     for prefix in APP_LAUNCH_PREFIXES:
         if lower.startswith(prefix) and len(lower) > len(prefix) + 1:
             return "app_launch"
+    for kw in SCREEN_VISION_KEYWORDS:
+        if kw in lower:
+            return "screen_vision"
     for kw in SYS_MONITOR_KEYWORDS:
         if kw in lower:
             return "sys_monitor"
@@ -184,7 +205,7 @@ class Router:
         intent = classify_intent(message)
 
         # Tool intents: delegate to tool executor
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
 
@@ -229,7 +250,7 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result

@@ -9,6 +9,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Utilities | Calculator, unit conversion, random, notes |
 | Info | Weather, web search |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
+| Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
 
 ---
@@ -165,6 +166,18 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 *Drop PDF, Excel, Word, or text files into `data/knowledge/`, then index. Enable RAG in Settings. Long-term memory (Settings toggle) extracts facts from chat. Say "check my docs for X" or "search my files for Y" to query documents and memory. On-demand only—no automatic injection. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).*
 
 ---
+
+## Screen Vision
+
+| Action | Example |
+|--------|---------|
+| Describe screen | "what am I looking at" / "what's on screen" / "describe my screen" |
+| Extract code | "extract the code from this" / "extract code from this video tutorial" |
+| Analyze content | "what do you see" / "look at my screen" |
+
+*Captures the current screen and sends it to your selected vision model (Ollama or OpenRouter). Local: run `ollama pull llava` or `ollama pull llama3.2-vision` and set `OLLAMA_VISION_MODEL` in `.env` if needed. OpenRouter models (Claude, GPT-4V) support vision by default. On Wayland, screen capture may require X11 or grim/slurp.*
+
+**Hotkey:** `Ctrl+Shift+S` (or `Meta+Shift+S` on Mac) to instantly ask "what am I looking at?"
 
 ---
 

@@ -101,6 +101,13 @@ SKILLS: list[SkillEntry] = [
         "description": "Search your files and remembered facts",
         "examples": ["check my docs for X", "search my files for Y", "what do my files say about Z"],
     },
+    # Vision
+    {
+        "category": "Vision",
+        "name": "Screen vision",
+        "description": "Describe or analyze what's on your screen",
+        "examples": ["what am I looking at", "what's on screen", "extract the code from this", "describe my screen"],
+    },
     # System (Linux)
     {
         "category": "System",

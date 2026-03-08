@@ -42,6 +42,7 @@ from gerty.tools import (
     PomodoroTool,
     RandomTool,
     RagTool,
+    ScreenVisionTool,
     SearchTool,
     StopwatchTool,
     SysMonitorTool,
@@ -139,6 +140,7 @@ def main():
     executor.register(AppLaunchTool())
 
     router = Router(tool_executor=executor.execute)
+    executor.register(ScreenVisionTool(router=router), ["screen_vision"])
 
     # Check Ollama
     try:

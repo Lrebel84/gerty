@@ -12,6 +12,7 @@ from gerty.tools.stopwatch import StopwatchTool
 from gerty.tools.timezone import TimezoneTool
 from gerty.tools.weather import WeatherTool
 from gerty.tools.rag_tool import RagTool
+from gerty.tools.screen_vision import ScreenVisionTool
 from gerty.tools.search import SearchTool
 from gerty.tools.pomodoro import PomodoroTool
 from gerty.tools.system_command import SystemCommandTool
@@ -33,6 +34,7 @@ __all__ = [
     "TimezoneTool",
     "WeatherTool",
     "RagTool",
+    "ScreenVisionTool",
     "SearchTool",
     "PomodoroTool",
     "SystemCommandTool",

@@ -24,6 +24,8 @@ OLLAMA_TOOL_MODEL = os.getenv("OLLAMA_TOOL_MODEL", "") or _ollama_default
 OLLAMA_REASONING_MODEL = os.getenv("OLLAMA_REASONING_MODEL", "") or _ollama_default
 # Voice: faster model for low-latency voice replies (e.g. llama3.2). Empty = use chat model.
 OLLAMA_VOICE_MODEL = os.getenv("OLLAMA_VOICE_MODEL", "") or None
+# Vision: llava (smaller/faster) or llama3.2-vision for screen/screenshot analysis.
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "llava")
 # Temperature: 0.0-0.1 for factual/control assistant; higher for creative. Reduces hallucinations.
 OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
 

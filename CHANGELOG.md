@@ -11,6 +11,31 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.24] - 2025-03-08
+
+### Vision and Screen Awareness
+
+Gerty can now see your screen. Ask "what am I looking at?" or "extract the code from this" and get a description or analysis of what's on your display.
+
+#### Screen Vision Tool
+- **Screenshot + vision model** – Captures desktop with `mss`, encodes to base64, sends to local (Ollama) or OpenRouter vision model
+- **Provider-aware** – Uses whichever model you have selected (Ollama or OpenRouter)
+- **Keywords** – "what am I looking at", "what's on screen", "extract code", "describe my screen", etc.
+- **Hotkey** – `Ctrl+Shift+S` (or `Meta+Shift+S` on Mac) to instantly ask "what am I looking at?"
+
+#### Models
+- **Local (Ollama):** `OLLAMA_VISION_MODEL` in `.env` – default `moondream` (fast), or `qwen2.5vl:7b` (better quality), `llava`, `llama3.2-vision`
+- **OpenRouter:** Uses your configured model (Claude, GPT-4V support vision)
+- Run `ollama pull moondream` for fast responses
+
+#### Config & deps
+- `OLLAMA_VISION_MODEL` – Vision model for screen analysis (default: moondream)
+- `mss` in requirements.txt
+- COMMANDS.md – Screen Vision section
+- Skills registry and frontend – Screen Vision skill
+
+---
+
 ## [0.8.23] - 2025-03-07
 
 ### Deep Linux System Agency

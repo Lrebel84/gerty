@@ -61,6 +61,29 @@ class OpenRouterClient:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
+    def chat_with_images(
+        self,
+        message: str,
+        images: list[str],
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Send a message with images to a vision model. Images as base64 strings."""
+        content: list[dict] = [{"type": "text", "text": message}]
+        for b64 in images:
+            url = f"data:image/png;base64,{b64}" if not b64.startswith("data:") else b64
+            content.append({"type": "image_url", "image_url": {"url": url}})
+
+        messages = [{"role": "user", "content": content}]
+        if system_prompt:
+            messages.insert(0, {"role": "system", "content": system_prompt})
+
+        response = self.client.chat.completions.create(
+            model=model or self.model,
+            messages=messages,
+        )
+        return response.choices[0].message.content or ""
+
     def is_available(self) -> bool:
         """Check if OpenRouter is configured and reachable."""
         return bool(self.client.api_key)
