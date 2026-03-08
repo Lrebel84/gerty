@@ -38,6 +38,10 @@ OPENROUTER_RESEARCH_MODEL = os.getenv("OPENROUTER_RESEARCH_MODEL", "x-ai/grok-4.
 # Web plugin options for research/search (OpenRouter)
 OPENROUTER_WEB_MAX_RESULTS = int(os.getenv("OPENROUTER_WEB_MAX_RESULTS", "10"))
 OPENROUTER_SEARCH_CONTEXT = os.getenv("OPENROUTER_SEARCH_CONTEXT", "high")  # low, medium, high
+# Quick search: fewer results, faster (for web_lookup vs deep research)
+OPENROUTER_QUICK_SEARCH_MAX_RESULTS = int(os.getenv("OPENROUTER_QUICK_SEARCH_MAX_RESULTS", "5"))
+# LLM-based intent fallback: when chat, check if query needs web search (adds ~100-500ms)
+GERTY_WEB_INTENT_FALLBACK = os.getenv("GERTY_WEB_INTENT_FALLBACK", "1").lower() in ("1", "true", "yes")
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")

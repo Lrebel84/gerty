@@ -10,8 +10,8 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
 - **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
-- **Web search** (optional): `pip install duckduckgo-search` for the search tool
-- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. See COMMANDS.md.
+- **Web search** (optional): `pip install duckduckgo-search`. Routes by intent: "search for X", "get me contact details for Y", "when is showtimes of Z", etc. OpenRouter uses quick search for simple lookups.
+- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. LLM intent fallback routes ambiguous chat queries to web when needed. See COMMANDS.md.
 - **Interactive browsing** (OpenRouter, opt-in): Navigate, click, fill forms. Requires Python 3.11+, `GERTY_BROWSE_ENABLED=1`, and `pip install browser-use playwright` + `python -m playwright install chromium`. See COMMANDS.md.
 
 ## Setup

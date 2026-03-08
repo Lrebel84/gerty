@@ -13,7 +13,36 @@ from gerty.tools.weather import _extract_city
 from gerty.tools.notes import _extract_note_from_message
 from gerty.tools.system_command import _classify_system_intent
 from gerty.tools.media_control import _classify_media_intent
-from gerty.tools.app_launch import _extract_app_name
+from gerty.tools.app_launch import _extract_app_name, _find_app
+from gerty.tools.search import _extract_query
+
+
+class TestSearchQueryExtraction:
+    """Tests for search query extraction from natural language."""
+
+    def test_explicit_phrases(self):
+        assert _extract_query("search for Python tutorial") == "Python tutorial"
+        assert _extract_query("look up current events") == "current events"
+        assert _extract_query("find best restaurants") == "best restaurants"
+
+    def test_implicit_get_me_find_me(self):
+        assert _extract_query("can you get me the contact details for xyz business") == "the contact details for xyz business"
+        assert _extract_query("find me a good plumber") == "a good plumber"
+
+    def test_when_is(self):
+        assert _extract_query("when is the next showtimes of Dune at VUE Sheffield") == "the next showtimes of Dune at VUE Sheffield"
+
+    def test_contact_details_for(self):
+        assert _extract_query("contact details for Acme Corp") == "Acme Corp"
+        assert _extract_query("phone number for xyz business") == "xyz business"
+
+    def test_who_owns_where_can_i_find(self):
+        assert _extract_query("who owns Tesla") == "Tesla"
+        assert _extract_query("where can i find the nearest post office") == "the nearest post office"
+
+    def test_fallback_for_web_lookup_keywords(self):
+        """When message has web lookup signals but no extraction phrase, use whole message."""
+        assert _extract_query("showtimes for Dune at Odeon") == "showtimes for Dune at Odeon"
 
 
 class TestNumberWords:
@@ -270,3 +299,21 @@ class TestAppLaunchExtraction:
 
     def test_no_match(self):
         assert _extract_app_name("what time is it") is None
+
+    def test_find_spotify_from_xdg_dirs(self, monkeypatch, tmp_path):
+        """_find_app finds Spotify when desktop file is in XDG dir (e.g. Snap)."""
+        # Create Spotify-like desktop file (Snap uses spotify_spotify.desktop)
+        desktop = tmp_path / "spotify_spotify.desktop"
+        desktop.write_text("""[Desktop Entry]
+Type=Application
+Name=Spotify
+GenericName=Music Player
+Exec=/snap/bin/spotify %U
+""", encoding="utf-8")
+        monkeypatch.setattr("gerty.tools.app_launch._get_desktop_dirs", lambda: [tmp_path])
+        monkeypatch.setattr("gerty.tools.app_launch._app_index", None)
+        match = _find_app("Spotify")
+        assert match is not None
+        path, display_name = match
+        assert path == desktop
+        assert display_name == "Spotify"

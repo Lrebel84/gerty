@@ -8,14 +8,46 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_query(message: str) -> str | None:
-    """Extract search query from message."""
+    """Extract search query from message. Handles explicit and implicit search phrasings."""
     lower = message.lower()
-    for phrase in ["search for", "search ", "look up", "find ", "google "]:
+    # Explicit search phrases (longer phrases first to avoid "find " matching "find me ")
+    for phrase in ["search for", "search ", "look up", "look up the ", "google ", "find me ", "find "]:
         if phrase in lower:
             idx = lower.find(phrase) + len(phrase)
             rest = message[idx:].strip().lstrip(":").strip()
             if rest:
                 return rest
+    # Implicit web lookup: "get me X", "can you get me X", "can you find me X" (find me in explicit above)
+    for phrase in ["can you get me ", "can you find me ", "get me "]:
+        if phrase in lower:
+            idx = lower.find(phrase) + len(phrase)
+            rest = message[idx:].strip().lstrip(":").strip()
+            if rest:
+                return rest
+    # "when is X" - e.g. "when is the next showtimes of Dune at VUE Sheffield"
+    if "when is" in lower:
+        idx = lower.find("when is") + len("when is")
+        rest = message[idx:].strip().lstrip(":").strip()
+        if rest:
+            return rest
+    # "contact details for X", "contact info for X" - extract the entity
+    for phrase in ["contact details for ", "contact info for ", "phone number for ", "address of "]:
+        if phrase in lower:
+            idx = lower.find(phrase) + len(phrase)
+            rest = message[idx:].strip().lstrip(":").strip()
+            if rest:
+                return rest
+    # "who owns X", "where can i find X"
+    for phrase in ["who owns ", "where can i find ", "where can i get "]:
+        if phrase in lower:
+            idx = lower.find(phrase) + len(phrase)
+            rest = message[idx:].strip().lstrip(":").strip()
+            if rest:
+                return rest
+    # Fallback: if message looks like a request for info, use whole message as query
+    # (e.g. "who owns xyz business" -> "who owns xyz business")
+    if any(kw in lower for kw in ["contact", "showtimes", "opening hours", "phone", "address", "where can i find"]):
+        return message.strip()
     return None
 
 

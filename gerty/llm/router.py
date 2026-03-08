@@ -6,6 +6,7 @@ from typing import Callable, Iterator
 
 from gerty.config import (
     GERTY_BROWSE_ENABLED,
+    GERTY_WEB_INTENT_FALLBACK,
     OPENROUTER_API_KEY,
     OLLAMA_CHAT_MODEL,
     OLLAMA_REASONING_MODEL,
@@ -45,6 +46,13 @@ RAG_KEYWORDS = [
     "check my files", "check files for",
 ]
 SEARCH_KEYWORDS = ["search for", "search ", "look up", "google"]
+# Web lookup: queries needing current info but without explicit "search" keywords
+WEB_LOOKUP_KEYWORDS = [
+    "contact details", "contact info", "get me", "find me",
+    "when is", "showtimes", "opening hours", "phone number",
+    "address of", "where can i find", "who owns", "can you find",
+    "can you get me", "look up the", "what's the phone", "what's the address",
+]
 POMODORO_KEYWORDS = ["pomodoro"]
 # System tools - check before generic chat
 APP_LAUNCH_PREFIXES = ["open ", "launch ", "start ", "run "]
@@ -71,8 +79,8 @@ SCREEN_VISION_KEYWORDS = [
 ]
 RESEARCH_KEYWORDS = [
     "research", "compare and summarize", "create a spreadsheet",
-    "find the best", "compare the top", "analyze and report",
-    "gather information about",
+    "find the best", "find me the best", "compare the top", "analyze and report",
+    "gather information about", "complete overview", "thoroughly research",
 ]
 BROWSE_KEYWORDS = [
     "browse", "go to", "navigate to", "open the page", "check my",
@@ -127,6 +135,9 @@ def classify_intent(text: str) -> str:
         if kw in lower and GERTY_BROWSE_ENABLED:
             return "browse"
     for kw in SEARCH_KEYWORDS:
+        if kw in lower:
+            return "search"
+    for kw in WEB_LOOKUP_KEYWORDS:
         if kw in lower:
             return "search"
     for kw in POMODORO_KEYWORDS:
@@ -198,6 +209,51 @@ def parse_timer_duration(text: str) -> int | None:
     return total_seconds if total_seconds > 0 else None
 
 
+def _classify_web_intent_fallback(
+    message: str,
+    ollama: OllamaClient,
+    openrouter: OpenRouterClient,
+) -> str:
+    """
+    When keyword classification returns chat, check if query needs web search.
+    Returns: web_lookup | web_research | no_web
+    """
+    prompt = (
+        "Does this query require current/live information from the web to answer accurately?\n"
+        "Categories:\n"
+        "- web_lookup: quick fact (contact details, showtimes, opening hours, phone number, address)\n"
+        "- web_research: compare, analyze, multi-step research, spreadsheets\n"
+        "- no_web: general knowledge, opinion, coding, no web needed\n"
+        "Reply with exactly one word: web_lookup | web_research | no_web\n\n"
+        f"Query: {message}"
+    )
+    try:
+        if ollama.is_available():
+            out = ollama.chat(
+                prompt,
+                history=[],
+                model=OLLAMA_CHAT_MODEL,
+                system_prompt="Reply with exactly one word: web_lookup, web_research, or no_web.",
+            )
+        elif OPENROUTER_API_KEY and openrouter.is_available():
+            out = openrouter.chat(
+                prompt,
+                history=[],
+                model="openai/gpt-4o-mini",
+                system_prompt="Reply with exactly one word: web_lookup, web_research, or no_web.",
+            )
+        else:
+            return "no_web"
+        out = out.strip().lower()
+        if "web_lookup" in out:
+            return "web_lookup"
+        if "web_research" in out:
+            return "web_research"
+    except Exception as e:
+        logger.debug("Web intent fallback failed: %s", e)
+    return "no_web"
+
+
 class Router:
     """Routes messages to tools or LLM backends."""
 
@@ -220,6 +276,14 @@ class Router:
         Returns response text.
         """
         intent = classify_intent(message)
+
+        # LLM-based fallback: when chat, check if query needs web search
+        if intent == "chat" and GERTY_WEB_INTENT_FALLBACK:
+            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+            if fallback == "web_lookup":
+                intent = "search"
+            elif fallback == "web_research":
+                intent = "research"
 
         # Tool intents: delegate to tool executor
         tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
@@ -266,16 +330,28 @@ class Router:
     ) -> Iterator[str]:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
+
+        # LLM-based fallback: when chat, check if query needs web search
+        if intent == "chat" and GERTY_WEB_INTENT_FALLBACK:
+            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+            if fallback == "web_lookup":
+                intent = "search"
+            elif fallback == "web_research":
+                intent = "research"
+
         if intent in ("research", "search", "browse"):
             logger.info("Router: intent=%r message=%r", intent, message[:80] + "..." if len(message) > 80 else message)
 
-        # Search with OpenRouter :online when provider is OpenRouter (richer, cited results)
+        # Search with OpenRouter :online when provider is OpenRouter
+        # Use quick_search (fewer results, faster) for simple lookups vs full research
         if intent == "search":
             use_openrouter = (provider or "local").lower() == "openrouter"
             if use_openrouter and OPENROUTER_API_KEY and self.openrouter.is_available():
                 try:
                     yield "Searching..."
-                    response = self.openrouter.research(message, history, system_prompt=custom_prompt)
+                    response = self.openrouter.quick_search(
+                        message, history, system_prompt=custom_prompt
+                    )
                     yield response
                     return
                 except Exception as e:

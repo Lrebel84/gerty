@@ -137,11 +137,14 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 | Command | Example |
 |---------|---------|
-| Search | "search for Python tutorial" / "look up current events" |
+| Explicit search | "search for Python tutorial" / "look up current events" |
+| Contact & info | "get me the contact details for Acme Corp" / "phone number for xyz business" |
+| Showtimes & hours | "when is the next showtimes of Dune at VUE Sheffield" / "opening hours of the library" |
+| Find/lookup | "find me a good plumber" / "where can i find the address of city hall" |
 
 *Uses DuckDuckGo. Requires: `pip install duckduckgo-search`*
 
-*When using OpenRouter (Settings → Provider → OpenRouter), simple search uses the :online model for richer, cited results.*
+*When using OpenRouter (Settings → Provider → OpenRouter), search uses quick web lookup (:online, fewer results) for faster responses. Queries that don't match explicit keywords may still route to web search via intent fallback (GERTY_WEB_INTENT_FALLBACK=1).*
 
 ---
 
@@ -166,6 +169,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Command | Example |
 |---------|---------|
 | Research & compare | "research best 3D printers under $500" / "compare and summarize top project management tools" |
+| Find best / overview | "find me the best budget PCs for local LLM under £500" / "thoroughly research this business and provide a complete overview" |
 | Create spreadsheet | "find the best laptops and create a spreadsheet" / "analyze and report on electric cars under $40k" |
 
 *Requires OpenRouter (Settings → Provider → OpenRouter). Uses native web search (e.g. Grok 4.1 Fast :online) for multi-step research. Tables are saved to `data/research_*.csv`. Works for both typed chat and voice. When using local provider, Gerty will prompt you to switch to OpenRouter.*

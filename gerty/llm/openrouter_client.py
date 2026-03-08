@@ -6,6 +6,7 @@ from gerty.config import (
     OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL,
     OPENROUTER_MODEL,
+    OPENROUTER_QUICK_SEARCH_MAX_RESULTS,
     OPENROUTER_RESEARCH_MODEL,
     OPENROUTER_SEARCH_CONTEXT,
     OPENROUTER_WEB_MAX_RESULTS,
@@ -136,6 +137,38 @@ class OpenRouterClient:
         """
         response = self._research_request(
             message, history, model, system_prompt, stream=False
+        )
+        return response.choices[0].message.content or ""
+
+    def quick_search(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """
+        Quick web lookup via OpenRouter :online model. Fewer results, lighter prompt.
+        For contact details, showtimes, simple facts. Faster than full research().
+        """
+        model = model or OPENROUTER_RESEARCH_MODEL
+        quick_prompt = (
+            "Use web search to find current, accurate information. "
+            "Be concise. Cite sources when relevant."
+        )
+        effective_system = (system_prompt or "") + "\n\n" + quick_prompt if system_prompt else quick_prompt
+        messages = list(history or [])
+        messages.insert(0, {"role": "system", "content": effective_system})
+        messages.append({"role": "user", "content": message})
+        extra_body = {
+            "plugins": [{"id": "web", "max_results": OPENROUTER_QUICK_SEARCH_MAX_RESULTS}],
+            "web_search_options": {"search_context_size": "medium"},
+        }
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=False,
+            extra_body=extra_body,
         )
         return response.choices[0].message.content or ""
 

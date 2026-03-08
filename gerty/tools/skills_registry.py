@@ -91,8 +91,8 @@ SKILLS: list[SkillEntry] = [
     {
         "category": "Info",
         "name": "Web search",
-        "description": "Search the web (DuckDuckGo)",
-        "examples": ["search for Python tutorial", "look up current events"],
+        "description": "Search the web. Contact details, showtimes, lookups. DuckDuckGo or OpenRouter :online.",
+        "examples": ["search for Python tutorial", "get me contact details for Acme Corp", "when is showtimes of Dune at VUE Sheffield"],
     },
     {
         "category": "Info",

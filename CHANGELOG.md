@@ -11,6 +11,44 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.28] - 2025-03-08
+
+### Intent-Based Search Routing
+
+Improved web search and research routing so queries are routed by intent, not just explicit keywords. Queries like "get me contact details" and "when is showtimes" now reach web search.
+
+#### Web Lookup Keywords
+- **WEB_LOOKUP_KEYWORDS** – Phrases that imply web lookup: "contact details", "get me", "find me", "when is", "showtimes", "opening hours", "phone number", "address of", "where can i find", "who owns", "can you find", "can you get me"
+- **RESEARCH_KEYWORDS** extended – "find me the best", "complete overview", "thoroughly research"
+- Queries matching these now route to search (DuckDuckGo or OpenRouter) instead of falling through to chat
+
+#### LLM Intent Fallback
+- **GERTY_WEB_INTENT_FALLBACK** (default 1) – When keyword classification returns "chat", a fast LLM classifies as `web_lookup`, `web_research`, or `no_web`
+- Routes ambiguous queries (e.g. "what's the latest news about AI?") to web search when appropriate
+- Uses Ollama or OpenRouter gpt-4o-mini; adds ~100–500ms for chat queries
+
+#### Quick Search vs Deep Research
+- **quick_search()** – OpenRouter search intent now uses fewer results (5 vs 10) and lighter prompt for faster responses
+- **research()** – Full multi-step research with tables, CSV export for "research" intent
+- Config: `OPENROUTER_QUICK_SEARCH_MAX_RESULTS` (default 5)
+
+#### Query Extraction
+- **SearchTool** `_extract_query()` extended for: "get me X", "find me X", "when is X", "contact details for X", "who owns X", "where can i find X"
+- Fallback: use full message when web lookup signals present
+
+#### Config
+- `GERTY_WEB_INTENT_FALLBACK` – Enable LLM intent fallback for chat (default 1)
+- `OPENROUTER_QUICK_SEARCH_MAX_RESULTS` – Results for quick search (default 5)
+
+#### Docs & tests
+- COMMANDS.md – Web Search and Deep Research sections updated with new examples
+- .env.example – New config options
+- Skills registry and frontend – Web search skill examples
+- tests/test_router.py – Web lookup keywords, intent fallback
+- tests/test_tools.py – Search query extraction
+
+---
+
 ## [0.8.27] - 2025-03-08
 
 ### Powerful Web Search Assistant

@@ -1,8 +1,14 @@
 """Tests for LLM router intent classification and parsing."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
-from gerty.llm.router import classify_intent, parse_timer_duration
+from gerty.llm.router import (
+    _classify_web_intent_fallback,
+    classify_intent,
+    parse_timer_duration,
+)
 from gerty.tools.number_words import normalize_time_words
 
 
@@ -28,6 +34,18 @@ class TestClassifyIntent:
         assert classify_intent("compare and summarize top project management tools") == "research"
         assert classify_intent("find the best laptops") == "research"
         assert classify_intent("gather information about electric cars") == "research"
+        assert classify_intent("thoroughly research this business xyz") == "research"
+        assert classify_intent("complete overview of the market") == "research"
+        assert classify_intent("can you find me the best budget PCs for local LLM") == "research"
+
+    def test_web_lookup_keywords(self):
+        """Queries needing web search without explicit 'search for' keywords."""
+        assert classify_intent("can you get me the contact details for xyz business") == "search"
+        assert classify_intent("when is the next showtimes of Dune at VUE in Sheffield") == "search"
+        assert classify_intent("what's the phone number for Acme Corp") == "search"
+        assert classify_intent("opening hours of the library") == "search"
+        assert classify_intent("where can i find the address of city hall") == "search"
+        assert classify_intent("can you find me a good plumber") == "search"
 
     def test_complex(self):
         assert classify_intent("explain quantum physics") == "complex"
@@ -91,8 +109,10 @@ class TestClassifyIntent:
 
     def test_browse_disabled_falls_through(self):
         """When GERTY_BROWSE_ENABLED is False (default), browse keywords fall through to chat."""
-        # "go to" matches BROWSE_KEYWORDS but we only return "browse" when enabled
-        assert classify_intent("go to example.com") == "chat"
+        from unittest.mock import patch
+        with patch("gerty.llm.router.GERTY_BROWSE_ENABLED", False):
+            # "go to" matches BROWSE_KEYWORDS but we only return "browse" when enabled
+            assert classify_intent("go to example.com") == "chat"
 
     def test_browse_when_enabled(self):
         """When GERTY_BROWSE_ENABLED is True, browse keywords return browse."""
@@ -101,6 +121,45 @@ class TestClassifyIntent:
             assert classify_intent("go to example.com") == "browse"
             assert classify_intent("check my GitHub notifications") == "browse"
             assert classify_intent("visit python.org") == "browse"
+
+
+class TestClassifyWebIntentFallback:
+    """Tests for LLM-based web intent fallback (chat -> web_lookup/web_research)."""
+
+    def test_returns_web_lookup_when_ollama_says_so(self):
+        ollama = MagicMock()
+        ollama.is_available.return_value = True
+        ollama.chat.return_value = "web_lookup"
+        openrouter = MagicMock()
+        assert _classify_web_intent_fallback("get me contact details for Acme", ollama, openrouter) == "web_lookup"
+
+    def test_returns_web_research_when_ollama_says_so(self):
+        ollama = MagicMock()
+        ollama.is_available.return_value = True
+        ollama.chat.return_value = "web_research"
+        openrouter = MagicMock()
+        assert _classify_web_intent_fallback("compare top CRM tools", ollama, openrouter) == "web_research"
+
+    def test_returns_no_web_when_ollama_says_so(self):
+        ollama = MagicMock()
+        ollama.is_available.return_value = True
+        ollama.chat.return_value = "no_web"
+        openrouter = MagicMock()
+        assert _classify_web_intent_fallback("tell me a joke", ollama, openrouter) == "no_web"
+
+    def test_returns_no_web_when_ollama_unavailable(self):
+        ollama = MagicMock()
+        ollama.is_available.return_value = False
+        openrouter = MagicMock()
+        openrouter.is_available.return_value = False
+        assert _classify_web_intent_fallback("any query", ollama, openrouter) == "no_web"
+
+    def test_returns_no_web_on_exception(self):
+        ollama = MagicMock()
+        ollama.is_available.return_value = True
+        ollama.chat.side_effect = Exception("timeout")
+        openrouter = MagicMock()
+        assert _classify_web_intent_fallback("any query", ollama, openrouter) == "no_web"
 
 
 class TestParseTimerDuration:
