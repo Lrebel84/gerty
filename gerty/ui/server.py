@@ -120,8 +120,26 @@ def create_app(router):
         message = body.get("message", "")
         if not message:
             return {"reply": "", "error": "Empty message"}
+        settings = load_settings()
+        history = body.get("history", [])
+        provider = body.get("provider", settings.get("provider", "local"))
+        local_model = body.get("local_model", settings.get("local_model"))
+        openrouter_model = body.get("openrouter_model", settings.get("openrouter_model"))
+        custom_prompt = (body.get("custom_prompt") or settings.get("custom_prompt") or "").strip()
+        if not custom_prompt:
+            custom_prompt = DEFAULT_SYSTEM_PROMPT
         try:
-            reply = "".join(chat_pipeline_stream(router, message))
+            reply = "".join(
+                chat_pipeline_stream(
+                    router,
+                    message,
+                    history,
+                    provider=provider,
+                    local_model=local_model,
+                    openrouter_model=openrouter_model,
+                    custom_prompt=custom_prompt,
+                )
+            )
             return {"reply": reply}
         except Exception as e:
             logger.exception("Chat error")
@@ -323,7 +341,7 @@ def create_app(router):
     async def chat_stream(body: dict = Body(default_factory=dict)):
         message = body.get("message", "")
         history = body.get("history", [])
-        logger.info("Chat stream request: message=%r", message[:50] if message else "")
+        logger.info("Chat stream request: message=%r len=%d", message, len(message) if message else 0)
         if not message:
             return {"error": "Empty message"}
         settings = load_settings()

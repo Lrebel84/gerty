@@ -258,6 +258,8 @@ class Router:
     ) -> Iterator[str]:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
+        if intent in ("research", "search"):
+            logger.info("Router: intent=%r message=%r", intent, message[:80] + "..." if len(message) > 80 else message)
 
         tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:

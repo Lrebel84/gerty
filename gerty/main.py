@@ -289,9 +289,13 @@ def main():
 
     icon_path = str(PROJECT_ROOT / "assets" / "gerty.png")
 
-    # No on_closing handler - it blocked the window (evaluate_js + httpx can hang).
-    # Chat is already saved after each message and on beforeunload.
+    def on_closing():
+        """Allow window to close. Must not block (no evaluate_js/httpx)."""
+        return True
+
+    window.events.closing += on_closing
     webview.start(debug=False, gui="qt", icon=icon_path)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

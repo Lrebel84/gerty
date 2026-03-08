@@ -99,6 +99,7 @@ export function ChatWindow({ messages, onSend, onNewChat, voiceStatus, onVoiceSt
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const micClickBlockedRef = useRef(false)
   const recordingStartedAtRef = useRef<number | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const refreshAlarmsTimers = async () => {
     try {
@@ -225,12 +226,23 @@ export function ChatWindow({ messages, onSend, onNewChat, voiceStatus, onVoiceSt
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const text = input.trim()
+  const sendFromInput = () => {
+    const text = (inputRef.current?.value ?? input).trim()
     if (text) {
       onSend(text)
       setInput('')
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    sendFromInput()
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendFromInput()
     }
   }
 
@@ -525,9 +537,13 @@ export function ChatWindow({ messages, onSend, onNewChat, voiceStatus, onVoiceSt
       >
         <div className="flex gap-3">
           <input
+            ref={inputRef}
             type="text"
+            name="chat-message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            autoComplete="off"
             placeholder='Type a message, Say "Our Gurt" or click mic to chat'
             className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border)] rounded-xl px-4 py-3 text-sm placeholder:text-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />

@@ -118,6 +118,7 @@ Voice is **fully local** by default – no API keys required:
 This installs a `.desktop` file so you can:
 - **Launch** Gerty from the app launcher (Super key → search "Gerty")
 - **Pin to dock** – Launch Gerty, then right-click its dock icon → "Pin to dock"
+- **Close cleanly** – Clicking the window X button fully exits the app (no lingering process)
 
 ## Usage
 

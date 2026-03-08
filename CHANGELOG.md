@@ -11,6 +11,27 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.26] - 2025-03-08
+
+### Typed Chat Routing Fix
+
+Research queries typed in the chat bar now correctly route to OpenRouter deep research (instead of DuckDuckGo search).
+
+#### Changes
+- **Chat input** – `autoComplete="off"`, `name="chat-message"`, and Enter key intercepted via `onKeyDown` to prevent browser autocomplete from altering the message
+- **Value capture** – Read from DOM ref at send time for reliability
+- **Non-streaming fallback** – `/api/chat` now passes full request body (history, provider, models) so fallback matches streaming behavior
+- **Debug logging** – Intent and message logged when routing to research or search (see `gerty.log`)
+
+#### Desktop App Close Fix
+- **Proper exit** – App fully terminates when you click the window X button
+- **on_closing handler** – Minimal handler (returns True, no blocking) allows window to close
+- **sys.exit(0)** – Ensures process exits after `webview.start()` returns
+
+**Note:** After rebuilding or code changes, fully quit Gerty (or run `pkill -f gerty`) before restarting so the new code loads. A lingering process can serve stale code.
+
+---
+
 ## [0.8.25] - 2025-03-08
 
 ### Deep Research (OpenRouter)
