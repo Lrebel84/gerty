@@ -5,6 +5,7 @@ import re
 from typing import Callable, Iterator
 
 from gerty.config import (
+    GERTY_BROWSE_ENABLED,
     OPENROUTER_API_KEY,
     OLLAMA_CHAT_MODEL,
     OLLAMA_REASONING_MODEL,
@@ -73,6 +74,10 @@ RESEARCH_KEYWORDS = [
     "find the best", "compare the top", "analyze and report",
     "gather information about",
 ]
+BROWSE_KEYWORDS = [
+    "browse", "go to", "navigate to", "open the page", "check my",
+    "log into", "login to", "visit", "open the website",
+]
 COMPLEX_KEYWORDS = [
     "explain", "write code", "program", "analyze", "compare",
     "summarize", "translate", "complex", "detailed",
@@ -118,6 +123,9 @@ def classify_intent(text: str) -> str:
     for kw in RESEARCH_KEYWORDS:
         if kw in lower:
             return "research"
+    for kw in BROWSE_KEYWORDS:
+        if kw in lower and GERTY_BROWSE_ENABLED:
+            return "browse"
     for kw in SEARCH_KEYWORDS:
         if kw in lower:
             return "search"
@@ -214,7 +222,7 @@ class Router:
         intent = classify_intent(message)
 
         # Tool intents: delegate to tool executor
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
 
@@ -258,11 +266,25 @@ class Router:
     ) -> Iterator[str]:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
-        if intent in ("research", "search"):
+        if intent in ("research", "search", "browse"):
             logger.info("Router: intent=%r message=%r", intent, message[:80] + "..." if len(message) > 80 else message)
 
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
+        # Search with OpenRouter :online when provider is OpenRouter (richer, cited results)
+        if intent == "search":
+            use_openrouter = (provider or "local").lower() == "openrouter"
+            if use_openrouter and OPENROUTER_API_KEY and self.openrouter.is_available():
+                try:
+                    yield "Searching..."
+                    response = self.openrouter.research(message, history, system_prompt=custom_prompt)
+                    yield response
+                    return
+                except Exception as e:
+                    logger.debug("OpenRouter search fallback: %s", e)
+
+        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:
+            if intent == "browse":
+                yield "Browsing..."
             result = self._tool_executor(intent, message)
             yield result
             return

@@ -7,7 +7,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Time | Time, date, timezone, stopwatch |
 | Scheduling | Alarms, timers, pomodoro |
 | Utilities | Calculator, unit conversion, random, notes |
-| Info | Weather, web search, deep research (OpenRouter) |
+| Info | Weather, web search, deep research (OpenRouter), interactive browsing (OpenRouter) |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
@@ -140,6 +140,24 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Search | "search for Python tutorial" / "look up current events" |
 
 *Uses DuckDuckGo. Requires: `pip install duckduckgo-search`*
+
+*When using OpenRouter (Settings → Provider → OpenRouter), simple search uses the :online model for richer, cited results.*
+
+---
+
+## Interactive Browsing (OpenRouter, opt-in)
+
+*Requires `GERTY_BROWSE_ENABLED=1` in `.env` and OpenRouter*
+
+| Command | Example |
+|---------|---------|
+| Navigate | "go to example.com and find the pricing page" / "visit python.org" |
+| Browse | "browse to github.com and show my repos" |
+| Authenticated | "check my GitHub notifications" / "log into Gmail and check unread" |
+
+*Uses BrowserUse + Playwright. Requires Python 3.11+, then: `pip install browser-use playwright` and `python -m playwright install chromium`.*
+
+**Authenticated sites:** Save login state with `playwright codegen --save-storage=data/auth/github.json`, then set `BROWSE_AUTH_SITES=github.com:github.json` in `.env`. The browse tool loads the stored session when the task mentions the domain.
 
 ---
 

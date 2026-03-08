@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 from gerty.config import (
     ALARM_POLL_INTERVAL,
+    GERTY_BROWSE_ENABLED,
     OLLAMA_BASE_URL,
     SERVER_HOST,
     TELEGRAM_BOT_TOKEN,
@@ -36,6 +37,7 @@ from gerty.pipeline import chat_pipeline_sync
 from gerty.tools import (
     AlarmsTool,
     AppLaunchTool,
+    BrowseTool,
     CalculatorTool,
     MediaControlTool,
     NotesTool,
@@ -133,6 +135,8 @@ def main():
     executor.register(WeatherTool())
     executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
+    if GERTY_BROWSE_ENABLED:
+        executor.register(BrowseTool())
     executor.register(PomodoroTool())
     executor.register(MediaControlTool())
     executor.register(SysMonitorTool())

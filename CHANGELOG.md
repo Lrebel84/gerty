@@ -11,6 +11,40 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.27] - 2025-03-08
+
+### Powerful Web Search Assistant
+
+Upgraded web capabilities: enhanced OpenRouter search/research and new interactive browsing.
+
+#### Enhanced OpenRouter Web Search
+- **Web plugin options** – Research uses `plugins` and `web_search_options` (max_results, search_context_size) via `extra_body`
+- **Search with OpenRouter** – When provider is OpenRouter, simple "search for X" routes to `:online` model for richer, cited results (instead of DuckDuckGo)
+- **Config** – `OPENROUTER_WEB_MAX_RESULTS` (default 10), `OPENROUTER_SEARCH_CONTEXT` (low/medium/high)
+- **Bug fix** – Research failed with "unexpected keyword argument 'plugins'" – OpenRouter params now passed via `extra_body`
+
+#### Interactive Browsing (BrowserUse)
+- **Browse tool** – Navigate, click, fill forms. Uses BrowserUse + Playwright + OpenRouter
+- **Keywords** – "browse", "go to", "navigate to", "check my", "log into", "visit", "open the page"
+- **Authenticated sites** – Playwright storage-state: save session with `playwright codegen --save-storage=data/auth/site.json`, set `BROWSE_AUTH_SITES=domain.com:site.json`
+- **Opt-in** – `GERTY_BROWSE_ENABLED=1` (default off). Requires Python 3.11+, `pip install browser-use playwright`, `python -m playwright install chromium`
+- **Voice & chat** – Works in both; yields "Browsing..." immediately, then full result
+
+#### Config
+- `GERTY_BROWSE_ENABLED` – Enable interactive browsing (default 0)
+- `BROWSE_HEADED` – Show browser window for debugging (default 0)
+- `BROWSE_STORAGE_STATE_DIR` – Auth session files (default `data/auth/`)
+- `BROWSE_AUTH_SITES` – Domain → filename mapping for pre-authenticated sessions
+
+#### Docs & deps
+- COMMANDS.md – Interactive Browsing section, auth setup
+- README – Interactive browsing feature, Python 3.11+ requirement
+- requirements.txt – browser-use, playwright
+- .gitignore – data/auth/
+- Skills registry and frontend – Interactive browsing (OpenRouter) skill
+
+---
+
 ## [0.8.26] - 2025-03-08
 
 ### Typed Chat Routing Fix

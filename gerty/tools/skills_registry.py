@@ -100,6 +100,12 @@ SKILLS: list[SkillEntry] = [
         "description": "Multi-step web research, compare options, create spreadsheets. Requires OpenRouter.",
         "examples": ["research best 3D printers under $500", "compare and summarize top project management tools", "find the best laptops and create a spreadsheet"],
     },
+    {
+        "category": "Info",
+        "name": "Interactive browsing (OpenRouter)",
+        "description": "Navigate, click, fill forms. Access authenticated sites with storage-state. Requires OpenRouter and GERTY_BROWSE_ENABLED=1.",
+        "examples": ["go to example.com and find the pricing page", "check my GitHub notifications", "visit python.org and get the latest version"],
+    },
     # Knowledge
     {
         "category": "Knowledge",

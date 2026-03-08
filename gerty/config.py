@@ -35,6 +35,9 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 # Deep research: model with :online suffix for native web search (e.g. x-ai/grok-4.1-fast:online)
 OPENROUTER_RESEARCH_MODEL = os.getenv("OPENROUTER_RESEARCH_MODEL", "x-ai/grok-4.1-fast:online")
+# Web plugin options for research/search (OpenRouter)
+OPENROUTER_WEB_MAX_RESULTS = int(os.getenv("OPENROUTER_WEB_MAX_RESULTS", "10"))
+OPENROUTER_SEARCH_CONTEXT = os.getenv("OPENROUTER_SEARCH_CONTEXT", "high")  # low, medium, high
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -131,6 +134,15 @@ RAG_RELEVANCE_THRESHOLD = float(os.getenv("RAG_RELEVANCE_THRESHOLD", "0.9"))
 
 # System tools (lock, suspend, reboot, app launch, media, etc.) - opt-in for security
 GERTY_SYSTEM_TOOLS = os.getenv("GERTY_SYSTEM_TOOLS", "0").lower() in ("1", "true", "yes")
+# Interactive browsing (BrowserUse) - opt-in; can access sensitive sites
+GERTY_BROWSE_ENABLED = os.getenv("GERTY_BROWSE_ENABLED", "0").lower() in ("1", "true", "yes")
+# Browse: headless (default) or headed for debugging
+BROWSE_HEADED = os.getenv("BROWSE_HEADED", "0").lower() in ("1", "true", "yes")
+# Browse: storage-state dir for authenticated sites (data/auth/)
+_browse_auth = os.getenv("BROWSE_STORAGE_STATE_DIR", "")
+BROWSE_STORAGE_STATE_DIR = Path(_browse_auth) if _browse_auth else DATA_DIR / "auth"
+# Browse: domain -> storage-state filename, e.g. "github.com:github.json,gmail.com:gmail.json"
+BROWSE_AUTH_SITES = os.getenv("BROWSE_AUTH_SITES", "")
 
 # Server
 SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")

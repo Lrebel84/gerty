@@ -89,6 +89,19 @@ class TestClassifyIntent:
         assert classify_intent("make a note get groceries") == "notes"
         assert classify_intent("note: buy eggs") == "notes"
 
+    def test_browse_disabled_falls_through(self):
+        """When GERTY_BROWSE_ENABLED is False (default), browse keywords fall through to chat."""
+        # "go to" matches BROWSE_KEYWORDS but we only return "browse" when enabled
+        assert classify_intent("go to example.com") == "chat"
+
+    def test_browse_when_enabled(self):
+        """When GERTY_BROWSE_ENABLED is True, browse keywords return browse."""
+        from unittest.mock import patch
+        with patch("gerty.llm.router.GERTY_BROWSE_ENABLED", True):
+            assert classify_intent("go to example.com") == "browse"
+            assert classify_intent("check my GitHub notifications") == "browse"
+            assert classify_intent("visit python.org") == "browse"
+
 
 class TestParseTimerDuration:
     def test_minutes(self):

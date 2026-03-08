@@ -12,6 +12,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search` for the search tool
 - **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. See COMMANDS.md.
+- **Interactive browsing** (OpenRouter, opt-in): Navigate, click, fill forms. Requires Python 3.11+, `GERTY_BROWSE_ENABLED=1`, and `pip install browser-use playwright` + `python -m playwright install chromium`. See COMMANDS.md.
 
 ## Setup
 
@@ -53,6 +54,7 @@ cp .env.example .env
 # - TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS for mobile
 # - PICOVOICE_ACCESS_KEY for wake word (free at console.picovoice.ai)
 # - GERTY_SYSTEM_TOOLS=1 for system commands and app launching (lock, suspend, open apps)
+# - GERTY_BROWSE_ENABLED=1 for interactive browsing (requires Python 3.11+, browser-use, playwright)
 ```
 
 ### 3. Start Ollama (for local LLM)
@@ -156,7 +158,7 @@ gerty/
 │   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── research/        # Deep research: OpenRouter :online, table parsing, CSV output
-│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, pomodoro, system, media, app_launch, sys_monitor, screen_vision
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/

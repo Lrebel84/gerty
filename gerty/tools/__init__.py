@@ -18,6 +18,7 @@ from gerty.tools.pomodoro import PomodoroTool
 from gerty.tools.system_command import SystemCommandTool
 from gerty.tools.media_control import MediaControlTool
 from gerty.tools.app_launch import AppLaunchTool
+from gerty.tools.browse import BrowseTool
 from gerty.tools.sys_monitor import SysMonitorTool
 
 __all__ = [
@@ -40,5 +41,6 @@ __all__ = [
     "SystemCommandTool",
     "MediaControlTool",
     "AppLaunchTool",
+    "BrowseTool",
     "SysMonitorTool",
 ]
