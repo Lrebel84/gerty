@@ -11,6 +11,32 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.25] - 2025-03-08
+
+### Deep Research (OpenRouter)
+
+Gerty can now perform multi-step web research when using OpenRouter. Ask for comparisons, summaries, or spreadsheets and get thorough, cited answers with optional CSV export.
+
+#### Deep Research
+- **OpenRouter-only** – Uses `:online` model (e.g. Grok 4.1 Fast) for native web search; local keeps basic DuckDuckGo search
+- **Keywords** – "research", "compare and summarize", "find the best", "create a spreadsheet", "gather information about"
+- **Voice support** – Works with voice; says "Researching..." immediately, then full response (30–60s typical)
+- **Spreadsheet output** – Tables parsed from response and saved to `data/research_*.csv`
+- **Local fallback** – When provider is local: "Deep research requires OpenRouter. Switch provider in Settings."
+
+#### Config
+- `OPENROUTER_RESEARCH_MODEL` – Model with web search (default: `x-ai/grok-4.1-fast:online`)
+- `RESEARCH_OUTPUT_DIR` – Where to save CSV files (default: `data/`)
+
+#### TTS: URLs not read aloud
+- **sanitize_for_speech** – Markdown links `[text](url)` keep text only; bare URLs replaced with " [link] " so TTS skips long addresses
+
+#### Docs
+- COMMANDS.md – Deep Research section
+- Skills registry and frontend – Deep research (OpenRouter) skill
+
+---
+
 ## [0.8.24] - 2025-03-08
 
 ### Vision and Screen Awareness

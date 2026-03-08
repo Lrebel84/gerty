@@ -7,7 +7,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Time | Time, date, timezone, stopwatch |
 | Scheduling | Alarms, timers, pomodoro |
 | Utilities | Calculator, unit conversion, random, notes |
-| Info | Weather, web search |
+| Info | Weather, web search, deep research (OpenRouter) |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
@@ -140,6 +140,17 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Search | "search for Python tutorial" / "look up current events" |
 
 *Uses DuckDuckGo. Requires: `pip install duckduckgo-search`*
+
+---
+
+## Deep Research (OpenRouter)
+
+| Command | Example |
+|---------|---------|
+| Research & compare | "research best 3D printers under $500" / "compare and summarize top project management tools" |
+| Create spreadsheet | "find the best laptops and create a spreadsheet" / "analyze and report on electric cars under $40k" |
+
+*Requires OpenRouter (Settings → Provider → OpenRouter). Uses native web search (e.g. Grok 4.1 Fast :online) for multi-step research. Tables are saved to `data/research_*.csv`. When using local provider, Gerty will prompt you to switch to OpenRouter.*
 
 ---
 

@@ -33,6 +33,8 @@ OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# Deep research: model with :online suffix for native web search (e.g. x-ai/grok-4.1-fast:online)
+OPENROUTER_RESEARCH_MODEL = os.getenv("OPENROUTER_RESEARCH_MODEL", "x-ai/grok-4.1-fast:online")
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -112,6 +114,7 @@ KOKORO_VOICES_PATH = KOKORO_DIR / "voices-v1.0.bin"
 
 # Data directory for alarms etc.
 DATA_DIR = PROJECT_ROOT / "data"
+RESEARCH_OUTPUT_DIR = Path(os.getenv("RESEARCH_OUTPUT_DIR", "")) or DATA_DIR
 ALARMS_FILE = DATA_DIR / "alarms.json"
 CHAT_HISTORY_FILE = DATA_DIR / "chat_history.json"
 

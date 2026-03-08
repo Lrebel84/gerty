@@ -48,8 +48,11 @@ def sanitize_for_speech(text: str) -> str:
     s = re.sub(r"^#+\s*", "", s, flags=re.MULTILINE)
     # Remove bullet points at line start: - * • ·
     s = re.sub(r"^[\s]*[-*•·]\s+", "", s, flags=re.MULTILINE)
-    # Replace URLs with "link"
-    s = re.sub(r"https?://[^\s]+", "link", s)
+    # Markdown links [text](url): keep the text, drop the URL
+    s = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", s)
+    # Replace bare URLs with " [link] " so TTS doesn't read long addresses
+    s = re.sub(r"https?://[^\s)\]\">]+", " [link] ", s)
+    s = re.sub(r"www\.[^\s)\]\">]+", " [link] ", s)
     # Remove zero-width and similar invisible chars
     s = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", s)
     # Collapse multiple spaces/newlines

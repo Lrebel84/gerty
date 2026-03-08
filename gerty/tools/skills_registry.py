@@ -94,6 +94,12 @@ SKILLS: list[SkillEntry] = [
         "description": "Search the web (DuckDuckGo)",
         "examples": ["search for Python tutorial", "look up current events"],
     },
+    {
+        "category": "Info",
+        "name": "Deep research (OpenRouter)",
+        "description": "Multi-step web research, compare options, create spreadsheets. Requires OpenRouter.",
+        "examples": ["research best 3D printers under $500", "compare and summarize top project management tools", "find the best laptops and create a spreadsheet"],
+    },
     # Knowledge
     {
         "category": "Knowledge",

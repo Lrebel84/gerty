@@ -2,7 +2,12 @@
 
 from openai import OpenAI
 
-from gerty.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, OPENROUTER_MODEL
+from gerty.config import (
+    OPENROUTER_API_KEY,
+    OPENROUTER_BASE_URL,
+    OPENROUTER_MODEL,
+    OPENROUTER_RESEARCH_MODEL,
+)
 
 
 class OpenRouterClient:
@@ -83,6 +88,45 @@ class OpenRouterClient:
             messages=messages,
         )
         return response.choices[0].message.content or ""
+
+    def research(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> str:
+        """
+        Deep research via OpenRouter with :online model (native web search).
+        Uses OPENROUTER_RESEARCH_MODEL by default (e.g. x-ai/grok-4.1-fast:online).
+        """
+        model = model or OPENROUTER_RESEARCH_MODEL
+        research_prompt = (
+            "You are a thorough research assistant. Use web search to gather current, accurate information. "
+            "When the user asks for a spreadsheet or table, include a markdown table in your response "
+            "(format: | col1 | col2 | col3 |\\n|---|---|---|\\n| a | b | c |). "
+            "Be comprehensive and cite sources when relevant."
+        )
+        effective_system = (system_prompt or "") + "\n\n" + research_prompt if system_prompt else research_prompt
+        return self.chat(message, history, model=model, system_prompt=effective_system)
+
+    def research_stream(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        """Stream deep research response. Uses :online model for web search."""
+        model = model or OPENROUTER_RESEARCH_MODEL
+        research_prompt = (
+            "You are a thorough research assistant. Use web search to gather current, accurate information. "
+            "When the user asks for a spreadsheet or table, include a markdown table in your response "
+            "(format: | col1 | col2 | col3 |\\n|---|---|---|\\n| a | b | c |). "
+            "Be comprehensive and cite sources when relevant."
+        )
+        effective_system = (system_prompt or "") + "\n\n" + research_prompt if system_prompt else research_prompt
+        yield from self.chat_stream(message, history, model=model, system_prompt=effective_system)
 
     def is_available(self) -> bool:
         """Check if OpenRouter is configured and reachable."""

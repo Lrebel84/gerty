@@ -23,6 +23,12 @@ class TestClassifyIntent:
         assert classify_intent("set alarm for 7am") == "alarm"
         assert classify_intent("wake me at 6") == "alarm"
 
+    def test_research(self):
+        assert classify_intent("research best 3D printers under 500") == "research"
+        assert classify_intent("compare and summarize top project management tools") == "research"
+        assert classify_intent("find the best laptops") == "research"
+        assert classify_intent("gather information about electric cars") == "research"
+
     def test_complex(self):
         assert classify_intent("explain quantum physics") == "complex"
         assert classify_intent("write code for a REST API") == "complex"

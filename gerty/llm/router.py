@@ -68,6 +68,11 @@ SCREEN_VISION_KEYWORDS = [
     "what is on screen",
     "what can i see",  # "what can I see?"
 ]
+RESEARCH_KEYWORDS = [
+    "research", "compare and summarize", "create a spreadsheet",
+    "find the best", "compare the top", "analyze and report",
+    "gather information about",
+]
 COMPLEX_KEYWORDS = [
     "explain", "write code", "program", "analyze", "compare",
     "summarize", "translate", "complex", "detailed",
@@ -109,6 +114,10 @@ def classify_intent(text: str) -> str:
     for kw in RAG_KEYWORDS:
         if kw in lower:
             return "rag"
+    # Research before search: "research" contains "search", so check research first
+    for kw in RESEARCH_KEYWORDS:
+        if kw in lower:
+            return "research"
     for kw in SEARCH_KEYWORDS:
         if kw in lower:
             return "search"
@@ -254,6 +263,33 @@ class Router:
         if intent in tool_intents and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result
+            return
+
+        # Research intent: OpenRouter only (uses :online model for web search)
+        if intent == "research":
+            use_openrouter = (provider or "local").lower() == "openrouter"
+            if use_openrouter and OPENROUTER_API_KEY and self.openrouter.is_available():
+                try:
+                    # Yield immediate feedback for voice/streaming (research can take 30-60s)
+                    yield "Researching..."
+                    # Full response needed to parse tables; use sync research()
+                    response = self.openrouter.research(message, history, system_prompt=custom_prompt)
+                    from gerty.research.output import parse_and_save_tables
+
+                    saved_path = parse_and_save_tables(response)
+                    if saved_path:
+                        response = response + f"\n\n*Saved spreadsheet to `{saved_path}`*"
+                    yield response
+                    return
+                except Exception as e:
+                    logger.debug("Research fallback: %s", e)
+                    yield f"Research failed: {e}. Try again or use a simpler search."
+                    return
+            # Local provider: fallback message
+            yield (
+                "Deep research requires OpenRouter. Switch to OpenRouter in Settings to use "
+                "web search, multi-step research, and spreadsheet output."
+            )
             return
 
         use_local = (provider or "local").lower() == "local"
