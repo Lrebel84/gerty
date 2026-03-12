@@ -119,7 +119,7 @@ class OpenWakeWordDetector:
     """Fully local wake word detection using openWakeWord (no API key).
 
     Loads standard .onnx models from the official openWakeWord synthetic training
-    pipeline. See docs/WAKE_WORD_SYNTHETIC_TRAINING.md.
+    pipeline. Archived: docs/archive/WAKE_WORD_SYNTHETIC_TRAINING.md.
     """
 
     SAMPLE_RATE = 16000

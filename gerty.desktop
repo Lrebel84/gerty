@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Gerty
 Comment=Local AI voice assistant
-Exec=/home/liam/gerty/.venv/bin/python -m gerty
+Exec=/home/liam/gerty/scripts/launch_gerty.sh
 Path=/home/liam/gerty
 Icon=/home/liam/gerty/assets/gerty.png
 Type=Application

@@ -6,6 +6,8 @@ interface SettingsProps {
   open: boolean
   onClose: () => void
   onSave?: () => void
+  provider?: 'local' | 'openrouter'
+  onProviderChange?: (provider: 'local' | 'openrouter') => void
 }
 
 interface SettingsData {
@@ -64,7 +66,7 @@ const KOKORO_VOICES_FALLBACK = [
   'am_onyx', 'am_puck', 'am_santa',
 ]
 
-export function Settings({ open, onClose, onSave }: SettingsProps) {
+export function Settings({ open, onClose, onSave, provider = 'local', onProviderChange }: SettingsProps) {
   const [localModel, setLocalModel] = useState('')
   const [openrouterModel, setOpenrouterModel] = useState('')
   const [customPrompt, setCustomPrompt] = useState('')
@@ -257,6 +259,34 @@ export function Settings({ open, onClose, onSave }: SettingsProps) {
               </svg>
             </button>
           </div>
+
+          {onProviderChange && (
+            <section className="space-y-4 mb-6">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                Provider
+              </h3>
+              <div className="flex rounded-lg bg-[var(--bg-tertiary)] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => onProviderChange('local')}
+                  className={`flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                    provider === 'local' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  Local
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onProviderChange('openrouter')}
+                  className={`flex-1 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                    provider === 'openrouter' ? 'bg-[var(--accent)] text-white' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  OpenRouter
+                </button>
+              </div>
+            </section>
+          )}
 
           <section className="space-y-4 mb-6">
             <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">

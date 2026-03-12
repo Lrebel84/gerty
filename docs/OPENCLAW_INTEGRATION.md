@@ -99,6 +99,102 @@ OpenClaw uses its own config and API keys, separate from Gerty. Key locations:
 - **Chat history:** Gerty sends the full chat history (last N messages, configurable via `OPENCLAW_HISTORY_MAX_MESSAGES`) so OpenClaw has conversation context.
 - **New chat:** When you click "New chat", Gerty clears both local history and the OpenClaw session.
 
+## Self-improvement setup (PC/terminal, skills, commands)
+
+To let Gerty/OpenClaw run commands on your PC, install skills from ClawHub, control apps, and improve itself from your instructions:
+
+### 1. Workspace
+
+Set `agents.defaults.workspace` in `~/.openclaw/openclaw.json` to your Gerty project root so OpenClaw can edit files and install skills there:
+
+```json
+"agents": { "defaults": { "workspace": "/home/you/gerty" } }
+```
+
+### 2. Exec on gateway (host)
+
+By default, exec runs in a sandbox. For real PC/terminal access, set `tools.exec.host` to `gateway` in `~/.openclaw/openclaw.json`:
+
+```json
+"tools": {
+  "exec": {
+    "host": "gateway",
+    "security": "allowlist",
+    "ask": "on-miss"
+  }
+}
+```
+
+### 3. Exec approvals
+
+Create or edit `~/.openclaw/exec-approvals.json` to allow binaries for gateway exec. Use `security: "allowlist"` (safer) or `security: "full"` (all commands). Example allowlist:
+
+```json
+{
+  "version": 1,
+  "defaults": { "security": "allowlist", "ask": "on-miss", "autoAllowSkills": true },
+  "agents": {
+    "main": {
+      "security": "allowlist",
+      "allowlist": [
+        "/usr/bin/gtk-launch",
+        "/usr/bin/gio",
+        "/usr/bin/xdg-open",
+        "/usr/local/bin/npm",
+        "/usr/local/bin/node",
+        "/usr/local/bin/clawhub",
+        "/home/you/gerty/.venv/bin/python"
+      ]
+    }
+  }
+}
+```
+
+Resolve paths with `which clawhub`, `which npm`, etc. Edit via Control UI at `http://127.0.0.1:18789` → Nodes → Exec approvals.
+
+### 4. Web search
+
+Add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` to `~/.openclaw/.env` for `web_search` and `web_fetch`. See [Brave Search API](https://brave.com/search/api/) or [Perplexity API](https://docs.perplexity.ai/api-reference).
+
+### 5. ClawHub (skill installation)
+
+```bash
+npm install -g clawhub
+clawhub login
+```
+
+Set `CLAWHUB_WORKDIR` to your Gerty project so installs go to `./skills`:
+
+```bash
+export CLAWHUB_WORKDIR=/home/you/gerty
+clawhub install <skill-name>
+```
+
+OpenClaw can run `clawhub install` via exec when its workspace matches.
+
+### 6. Custom prompt for self-improvement
+
+In Gerty Settings, add a prompt that tells OpenClaw it can improve Gerty:
+
+> You are Gerty's action system. You can run commands on the host, install skills from ClawHub, edit files in the workspace, and use web search. The workspace is the Gerty project. When asked to add capabilities or improve Gerty, use exec to run clawhub install, edit files, and run tests as needed.
+
+### 7. Timeout for long tasks
+
+For skill installs and multi-step edits, increase `OPENCLAW_TIMEOUT` in Gerty's `.env` (e.g. 120 seconds).
+
+### Verification
+
+| Step | Check |
+|------|-------|
+| Connection | Say "list my skills" in Gerty |
+| Web search | "Search for latest Python release" |
+| Exec | "Run ls -la in my home directory" |
+| ClawHub | "Install the summarize skill from ClawHub" |
+| App launch | "Open Firefox" |
+| Self-improvement | "Add a new skill to Gerty that does X" |
+
+**Security:** Exec on gateway runs commands on your machine. Prefer allowlist over `security: "full"`. Review ClawHub skills before installing. Use a separate git branch when experimenting with self-improvement.
+
 ## Config Reference
 
 | Variable | Default | Purpose |

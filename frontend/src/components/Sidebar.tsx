@@ -1,39 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Settings } from './Settings'
 
-const API_BASE = '/api'
-
-interface Alarm {
-  time: string
-  label?: string
-  datetime?: string
-}
-
-interface Timer {
-  label: string
-  remaining_sec: number
-  duration_sec: number
-}
-
 interface SidebarProps {
   open: boolean
   width: number
   onResize: (width: number) => void
   onToggle: () => void
+  onSkillsClick?: () => void
+  onAlarmsTimersClick?: () => void
+  onNotesClick?: () => void
   voiceStatus?: 'idle' | 'listening' | 'processing'
   onSettingsSave?: () => void
+  provider?: 'local' | 'openrouter'
+  onProviderChange?: (provider: 'local' | 'openrouter') => void
 }
 
-function formatRemaining(sec: number): string {
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
-}
-
-export function Sidebar({ open, width, onResize, onToggle, onSettingsSave }: SidebarProps) {
-  const [alarms, setAlarms] = useState<Alarm[]>([])
-  const [timers, setTimers] = useState<Timer[]>([])
+export function Sidebar({ open, width, onResize, onToggle, onSkillsClick, onAlarmsTimersClick, onNotesClick, onSettingsSave, provider, onProviderChange }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [resizing, setResizing] = useState(false)
   const startXRef = useRef(0)
@@ -64,49 +46,6 @@ export function Sidebar({ open, width, onResize, onToggle, onSettingsSave }: Sid
     }
   }, [resizing, onResize])
 
-  useEffect(() => {
-    const fetchTools = async () => {
-      try {
-        const [alarmsRes, timersRes] = await Promise.all([
-          fetch(`${API_BASE}/alarms`),
-          fetch(`${API_BASE}/timers`),
-        ])
-        if (alarmsRes.ok) {
-          const data = await alarmsRes.json()
-          setAlarms(data.alarms || [])
-        }
-        if (timersRes.ok) {
-          const data = await timersRes.json()
-          setTimers(data.timers || [])
-        }
-      } catch {
-        // Ignore fetch errors
-      }
-    }
-
-    fetchTools()
-    const interval = setInterval(fetchTools, 2000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const cancelAlarms = async () => {
-    try {
-      await fetch(`${API_BASE}/alarms/cancel`, { method: 'POST' })
-      setAlarms([])
-    } catch {
-      // Ignore
-    }
-  }
-
-  const cancelTimers = async () => {
-    try {
-      await fetch(`${API_BASE}/timers/cancel`, { method: 'POST' })
-      setTimers([])
-    } catch {
-      // Ignore
-    }
-  }
-
   return (
     <aside
       className={`fixed left-0 top-0 h-full bg-[var(--bg-secondary)] border-r border-[var(--border)] z-10 transition-transform overflow-hidden flex flex-col ${
@@ -134,55 +73,45 @@ export function Sidebar({ open, width, onResize, onToggle, onSettingsSave }: Sid
         </button>
       </div>
       <nav className="p-2 space-y-4 overflow-y-auto overflow-x-hidden min-w-0 flex-1">
-        <section>
-          <h3 className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider px-3 py-2">
-            Alarms
-          </h3>
-          {alarms.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-[var(--text-secondary)]">No alarms set</p>
-          ) : (
-            <ul className="space-y-1">
-              {alarms.map((a, i) => (
-                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg min-w-0">
-                  <span className="truncate">{a.time} {a.label && `- ${a.label}`}</span>
-                </li>
-              ))}
-              <li>
-                <button
-                  onClick={cancelAlarms}
-                  className="text-xs text-amber-400 hover:text-amber-300 px-3 py-1"
-                >
-                  Cancel all
-                </button>
-              </li>
-            </ul>
-          )}
-        </section>
-        <section>
-          <h3 className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider px-3 py-2">
-            Timers
-          </h3>
-          {timers.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-[var(--text-secondary)]">No timers running</p>
-          ) : (
-            <ul className="space-y-1">
-              {timers.map((t, i) => (
-                <li key={i} className="px-3 py-2 text-sm flex justify-between items-center gap-2 bg-[var(--bg-tertiary)] rounded-lg min-w-0">
-                  <span className="truncate">{t.label}</span>
-                  <span className="text-[var(--text-secondary)] shrink-0">{formatRemaining(t.remaining_sec)}</span>
-                </li>
-              ))}
-              <li>
-                <button
-                  onClick={cancelTimers}
-                  className="text-xs text-amber-400 hover:text-amber-300 px-3 py-1"
-                >
-                  Cancel all
-                </button>
-              </li>
-            </ul>
-          )}
-        </section>
+        {onSkillsClick && (
+          <section>
+            <button
+              onClick={onSkillsClick}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Skills
+            </button>
+          </section>
+        )}
+        {onAlarmsTimersClick && (
+          <section>
+            <button
+              onClick={onAlarmsTimersClick}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Alarms &amp; Timers
+            </button>
+          </section>
+        )}
+        {onNotesClick && (
+          <section>
+            <button
+              onClick={onNotesClick}
+              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-[var(--bg-tertiary)] text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Notes
+            </button>
+          </section>
+        )}
         <section>
           <button
             onClick={() => setSettingsOpen(true)}
@@ -205,7 +134,7 @@ export function Sidebar({ open, width, onResize, onToggle, onSettingsSave }: Sid
           aria-label="Resize sidebar"
         />
       )}
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} onSave={onSettingsSave} />
+      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} onSave={onSettingsSave} provider={provider} onProviderChange={onProviderChange} />
     </aside>
   )
 }

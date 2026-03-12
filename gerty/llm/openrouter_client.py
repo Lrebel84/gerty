@@ -1,5 +1,8 @@
 """OpenRouter API client for cloud LLM access."""
 
+import json
+from typing import Any, Callable, Iterator
+
 from openai import OpenAI
 
 from gerty.config import (
@@ -11,6 +14,11 @@ from gerty.config import (
     OPENROUTER_SEARCH_CONTEXT,
     OPENROUTER_WEB_MAX_RESULTS,
 )
+
+# Tool executor: (name, arguments) -> result text
+ToolExecutor = Callable[[str, dict[str, Any]], str]
+# Batch: list of (name, args) -> list of result strings (same order)
+BatchToolExecutor = Callable[[list[tuple[str, dict[str, Any]]]], list[str]]
 
 
 class OpenRouterClient:
@@ -186,6 +194,153 @@ class OpenRouterClient:
         for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
+
+    def chat_with_tools(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        tools: list[dict] | None = None,
+        tool_executor: ToolExecutor | None = None,
+        batch_tool_executor: BatchToolExecutor | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        max_tool_rounds: int = 5,
+    ) -> str:
+        """Chat with tool-calling support. Loops until no tool_calls or max_tool_rounds."""
+        messages = list(history or [])
+        if system_prompt:
+            messages.insert(0, {"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": message})
+        tools = tools or []
+        tool_executor = tool_executor or (lambda _n, _a: "")
+
+        for _round in range(max_tool_rounds):
+            kwargs: dict = {
+                "model": model or self.model,
+                "messages": messages,
+            }
+            if tools:
+                kwargs["tools"] = tools
+
+            response = self.client.chat.completions.create(**kwargs)
+            msg = response.choices[0].message
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            content = msg.content or ""
+
+            if not tool_calls:
+                return content
+
+            messages.append(
+                {"role": "assistant", "content": content, "tool_calls": [{"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in tool_calls]}
+            )
+
+            if batch_tool_executor:
+                calls = []
+                for tc in tool_calls:
+                    args_raw = tc.function.arguments or "{}"
+                    try:
+                        args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                    except json.JSONDecodeError:
+                        args = {}
+                    calls.append((tc.function.name, args))
+                results = batch_tool_executor(calls)
+                for tc, result in zip(tool_calls, results):
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+            else:
+                for tc in tool_calls:
+                    name = tc.function.name
+                    args_raw = tc.function.arguments or "{}"
+                    try:
+                        args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                    except json.JSONDecodeError:
+                        args = {}
+                    result = tool_executor(name, args)
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+
+        return content
+
+    def chat_with_tools_stream(
+        self,
+        message: str,
+        history: list[dict] | None = None,
+        tools: list[dict] | None = None,
+        tool_executor: ToolExecutor | None = None,
+        batch_tool_executor: BatchToolExecutor | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        max_tool_rounds: int = 5,
+    ) -> Iterator[str]:
+        """Stream chat with tool-calling. Runs tool loop sync, then streams final response."""
+        messages = list(history or [])
+        if system_prompt:
+            messages.insert(0, {"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": message})
+        tools = tools or []
+        tool_executor = tool_executor or (lambda _n, _a: "")
+        content = ""
+
+        for round_num in range(max_tool_rounds):
+            kwargs: dict = {
+                "model": model or self.model,
+                "messages": messages,
+            }
+            if tools:
+                kwargs["tools"] = tools
+
+            response = self.client.chat.completions.create(**kwargs)
+            msg = response.choices[0].message
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            content = msg.content or ""
+
+            if not tool_calls:
+                for ch in content:
+                    yield ch
+                return
+
+            yield f"Using tools (round {round_num + 1}/{max_tool_rounds})... "
+            messages.append(
+                {"role": "assistant", "content": content, "tool_calls": [{"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}} for tc in tool_calls]}
+            )
+
+            if batch_tool_executor:
+                calls = []
+                for tc in tool_calls:
+                    args_raw = tc.function.arguments or "{}"
+                    try:
+                        args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                    except json.JSONDecodeError:
+                        args = {}
+                    calls.append((tc.function.name, args))
+                results = batch_tool_executor(calls)
+                for tc, result in zip(tool_calls, results):
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+            else:
+                for tc in tool_calls:
+                    name = tc.function.name
+                    args_raw = tc.function.arguments or "{}"
+                    try:
+                        args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                    except json.JSONDecodeError:
+                        args = {}
+                    result = tool_executor(name, args)
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+
+        # Hit max rounds with no usable final text: force one more call without tools to get a summary
+        if len(content.strip()) < 50:
+            try:
+                # Add explicit prompt so model knows to summarize (conversation ends with tool result)
+                summary_messages = messages + [
+                    {"role": "user", "content": "Based on the tool results above, provide a clear summary for the user. If there were errors, explain what went wrong. Keep it brief."},
+                ]
+                response = self.client.chat.completions.create(
+                    model=model or self.model,
+                    messages=summary_messages,
+                )
+                content = response.choices[0].message.content or ""
+            except Exception as e:
+                content = f"I ran into limits while fetching your calendar: {e}. Please try again."
+        for ch in content:
+            yield ch
 
     def is_available(self) -> bool:
         """Check if OpenRouter is configured and reachable."""

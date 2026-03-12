@@ -106,6 +106,13 @@ SKILLS: list[SkillEntry] = [
         "description": "Navigate, click, fill forms. Access authenticated sites with storage-state. Requires OpenRouter and GERTY_BROWSE_ENABLED=1.",
         "examples": ["go to example.com and find the pricing page", "check my GitHub notifications", "visit python.org and get the latest version"],
     },
+    # Integrations (MCP/Rube)
+    {
+        "category": "Integrations",
+        "name": "App actions (MCP/Rube)",
+        "description": "Send emails, create tasks, post to Slack, update Notion, GitHub, Linear, etc. Requires COMPOSIO_API_KEY.",
+        "examples": ["send an email to John about the meeting", "create a Notion task for the report", "post to Slack that I'm done"],
+    },
     # Knowledge
     {
         "category": "Knowledge",

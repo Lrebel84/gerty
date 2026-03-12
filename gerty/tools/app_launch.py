@@ -2,6 +2,7 @@
 
 import configparser
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -11,12 +12,23 @@ from gerty.tools.base import Tool
 
 logger = logging.getLogger(__name__)
 
-# XDG desktop file directories
-_DESKTOP_DIRS = [
+# Fallback when XDG env vars are unset
+_DEFAULT_DESKTOP_DIRS = [
     Path("/usr/share/applications"),
     Path("/usr/local/share/applications"),
     Path.home() / ".local" / "share" / "applications",
 ]
+
+
+def _get_desktop_dirs() -> list[Path]:
+    """Build application directories from XDG Base Directory Specification.
+    Returns dirs in precedence order: XDG_DATA_HOME first, then XDG_DATA_DIRS.
+    """
+    data_home = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    data_dirs = os.environ.get("XDG_DATA_DIRS", "/usr/local/share/:/usr/share/")
+    bases = [Path(data_home)] + [Path(p.strip()) for p in data_dirs.split(":") if p.strip()]
+    dirs = [base / "applications" for base in bases if (base / "applications").exists()]
+    return dirs if dirs else _DEFAULT_DESKTOP_DIRS
 
 # Index: lowercase search term -> list of (desktop_path, display_name)
 _app_index: dict[str, list[tuple[Path, str]]] | None = None
@@ -45,14 +57,14 @@ def _parse_desktop(path: Path) -> tuple[str | None, str | None, bool] | None:
 
 
 def _build_app_index() -> dict[str, list[tuple[Path, str]]]:
-    """Scan desktop dirs and build lookup index."""
+    """Scan desktop dirs and build lookup index.
+    Uses XDG_DATA_HOME and XDG_DATA_DIRS. First match wins (user overrides take precedence).
+    """
     global _app_index
     if _app_index is not None:
         return _app_index
     index: dict[str, list[tuple[Path, str]]] = {}
-    for base in _DESKTOP_DIRS:
-        if not base.exists():
-            continue
+    for base in _get_desktop_dirs():
         for path in base.glob("*.desktop"):
             parsed = _parse_desktop(path)
             if parsed is None:
@@ -61,23 +73,20 @@ def _build_app_index() -> dict[str, list[tuple[Path, str]]]:
             if skip:
                 continue
             display = name or path.stem
-            # Index by desktop basename (e.g. firefox, code)
+            # Index by desktop basename (e.g. firefox, code). First match wins.
             stem_lower = path.stem.lower()
             if stem_lower not in index:
-                index[stem_lower] = []
-            index[stem_lower].append((path, display))
+                index[stem_lower] = [(path, display)]
             # Index by Name
             if name:
                 key = name.lower()
                 if key not in index:
-                    index[key] = []
-                index[key].append((path, display))
+                    index[key] = [(path, display)]
             # Index by GenericName
             if generic:
                 key = generic.lower()
                 if key not in index:
-                    index[key] = []
-                index[key].append((path, display))
+                    index[key] = [(path, display)]
     _app_index = index
     return _app_index
 

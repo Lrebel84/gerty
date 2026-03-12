@@ -52,8 +52,9 @@ def _gateway_port_reachable() -> bool:
         return False
 
 
-# Max wait for OpenClaw — fail fast if daemon down or agent hangs
-EXECUTE_TIMEOUT = 15
+# Max wait for OpenClaw — use OPENCLAW_TIMEOUT from config (default 120 for long tasks)
+def _get_execute_timeout() -> int:
+    return OPENCLAW_TIMEOUT
 
 
 def execute(
@@ -68,10 +69,11 @@ def execute(
     if not _gateway_port_reachable():
         return OPENCLAW_UNAVAILABLE_MSG
     payload = _format_message(message, history=history, system_context=system_context)
+    timeout = _get_execute_timeout()
     try:
-        return asyncio.run(asyncio.wait_for(_execute_async(payload), timeout=EXECUTE_TIMEOUT))
+        return asyncio.run(asyncio.wait_for(_execute_async(payload), timeout=timeout))
     except asyncio.TimeoutError:
-        logger.warning("OpenClaw execute timed out after %ds", EXECUTE_TIMEOUT)
+        logger.warning("OpenClaw execute timed out after %ds", timeout)
         return OPENCLAW_UNAVAILABLE_MSG
 
 

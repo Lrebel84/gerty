@@ -7,6 +7,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 DESKTOP_SRC="$PROJECT_ROOT/gerty.desktop"
 DESKTOP_DEST="$HOME/.local/share/applications/gerty.desktop"
 
+# Ensure launch script is executable
+chmod +x "$PROJECT_ROOT/scripts/launch_gerty.sh" 2>/dev/null || true
+
 # Substitute project path in desktop file
 mkdir -p "$(dirname "$DESKTOP_DEST")"
 sed "s|/home/liam/gerty|$PROJECT_ROOT|g" "$DESKTOP_SRC" > "$DESKTOP_DEST"

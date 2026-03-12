@@ -4,7 +4,7 @@ from gerty.voice.audio import AudioCapture, AudioPlayback
 from gerty.voice.stt import SpeechToText
 from gerty.voice.tts import TextToSpeech
 from gerty.voice.vad import VADDetector, VAD_CHUNK_SAMPLES, VAD_SAMPLE_RATE
-from gerty.voice.wake_word import OpenWakeWordDetector, WakeWordDetector
+from gerty.voice.wake_word import OpenWakeWordDetector, create_wake_detector
 
 __all__ = [
     "AudioCapture",
@@ -15,5 +15,5 @@ __all__ = [
     "VAD_CHUNK_SAMPLES",
     "VADDetector",
     "VAD_SAMPLE_RATE",
-    "WakeWordDetector",
+    "create_wake_detector",
 ]
