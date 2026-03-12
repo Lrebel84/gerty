@@ -6,16 +6,22 @@ from typing import Callable, Iterator
 
 from gerty.config import (
     GERTY_BROWSE_ENABLED,
+    GERTY_OPENCLAW_ENABLED,
     GERTY_WEB_INTENT_FALLBACK,
     OPENROUTER_API_KEY,
+    OPENROUTER_MODEL,
     OLLAMA_CHAT_MODEL,
     OLLAMA_REASONING_MODEL,
 )
 from gerty.llm.ollama_client import OllamaClient
+from gerty.llm.openclaw_classifier import classify as openclaw_classify
 from gerty.llm.openrouter_client import OpenRouterClient
 from gerty.utils.math_extract import extract_math
 
 logger = logging.getLogger(__name__)
+
+# Fast path: instant Gerty tools—skip OpenClaw classifier
+FAST_PATH_INTENTS = ("time", "date", "alarm", "timer", "calculator", "units", "notes", "stopwatch", "timezone", "weather", "random", "rag")
 
 # Keywords for intent classification
 TIME_KEYWORDS = ["time", "what time", "current time", "what's the time"]
@@ -82,6 +88,16 @@ RESEARCH_KEYWORDS = [
     "find the best", "find me the best", "compare the top", "analyze and report",
     "gather information about", "complete overview", "thoroughly research",
 ]
+# App integration queries: calendar, gmail, drive, tasks - route to OpenClaw classifier
+# Include "emails"/"email" so "check my latest three emails" routes correctly (not browse/search)
+APP_INTEGRATION_KEYWORDS = [
+    "google calendar", "my calendar", "check my calendar", "what's on my calendar",
+    "my schedule", "calendar for", "check calendar",
+    "check my gmail", "my emails", "my inbox", "check my email", "my gmail",
+    "emails", "check emails", "latest emails", "read my email", "read my emails",
+    "google drive", "my drive", "my documents", "check my drive",
+    "google tasks", "my tasks", "check my tasks",
+]
 BROWSE_KEYWORDS = [
     "browse", "go to", "navigate to", "open the page", "check my",
     "log into", "login to", "visit", "open the website",
@@ -131,6 +147,10 @@ def classify_intent(text: str) -> str:
     for kw in RESEARCH_KEYWORDS:
         if kw in lower:
             return "research"
+    # App integration queries (calendar, gmail, drive, tasks) before browse
+    for kw in APP_INTEGRATION_KEYWORDS:
+        if kw in lower:
+            return "chat"
     for kw in BROWSE_KEYWORDS:
         if kw in lower and GERTY_BROWSE_ENABLED:
             return "browse"
@@ -254,6 +274,13 @@ def _classify_web_intent_fallback(
     return "no_web"
 
 
+OPENCLAW_APP_UNAVAILABLE_MSG = (
+    "I'd love to check your calendar/emails/drive/tasks, but OpenClaw isn't set up. "
+    "Add **GERTY_OPENCLAW_ENABLED=1** to your `.env`, install OpenClaw (`npm install -g openclaw`), "
+    "run `openclaw daemon start`, and configure your integrations. See docs/OPENCLAW_INTEGRATION.md."
+)
+
+
 class Router:
     """Routes messages to tools or LLM backends."""
 
@@ -277,18 +304,37 @@ class Router:
         """
         intent = classify_intent(message)
 
-        # LLM-based fallback: when chat, check if query needs web search
-        if intent == "chat" and GERTY_WEB_INTENT_FALLBACK:
-            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
-            if fallback == "web_lookup":
-                intent = "search"
-            elif fallback == "web_research":
-                intent = "research"
+        # Fast path: instant Gerty tools—skip classifier and web fallback
+        if intent in FAST_PATH_INTENTS and self._tool_executor:
+            return self._tool_executor(intent, message)
 
-        # Tool intents: delegate to tool executor
+        # OpenClaw: classifier runs FIRST for non-fast-path (per OPENCLAW_INTEGRATION.md)
+        # Gerty = chat/Q&A/search; OpenClaw = actions. Classifier-routed gerty goes straight to chat.
+        if GERTY_OPENCLAW_ENABLED:
+            result = openclaw_classify(message, self.ollama, self.openrouter)
+            if result["route"] == "openclaw":
+                from gerty.openclaw.client import execute as openclaw_execute
+                task = result.get("reformulated_task", "").strip() or message
+                return openclaw_execute(task)
+            # Classifier said gerty: skip web fallback, go to chat (avoids extra LLM call + misrouting)
+
+        # Web fallback: only when OpenClaw disabled (classifier not run). Adds ~5-15s; can misroute chat to research.
+        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
+            if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
+                fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+                if fallback == "web_lookup":
+                    intent = "search"
+                elif fallback == "web_research":
+                    intent = "research"
+
+        # Tool intents (non-fast-path): delegate to tool executor
         tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
         if intent in tool_intents and self._tool_executor:
             return self._tool_executor(intent, message)
+
+        # App integration query (calendar, gmail, drive, tasks) but OpenClaw disabled
+        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
+            return OPENCLAW_APP_UNAVAILABLE_MSG
 
         # Complex intent: use reasoning model or OpenRouter
         if intent == "complex":
@@ -331,13 +377,33 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        # LLM-based fallback: when chat, check if query needs web search
-        if intent == "chat" and GERTY_WEB_INTENT_FALLBACK:
-            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
-            if fallback == "web_lookup":
-                intent = "search"
-            elif fallback == "web_research":
-                intent = "research"
+        # Fast path: instant Gerty tools—skip classifier and web fallback
+        if intent in FAST_PATH_INTENTS and self._tool_executor:
+            result = self._tool_executor(intent, message)
+            yield result
+            return
+
+        # OpenClaw: classifier runs FIRST for non-fast-path (per OPENCLAW_INTEGRATION.md)
+        # Gerty = chat/Q&A/search; OpenClaw = actions. Classifier-routed gerty goes straight to chat.
+        if GERTY_OPENCLAW_ENABLED:
+            result = openclaw_classify(message, self.ollama, self.openrouter)
+            if result["route"] == "openclaw":
+                from gerty.openclaw.client import execute as openclaw_execute
+                yield "Working on it..."
+                task = result.get("reformulated_task", "").strip() or message
+                response = openclaw_execute(task)
+                yield response
+                return
+            # Classifier said gerty: skip web fallback, go to chat (avoids extra LLM call + misrouting)
+
+        # Web fallback: only when OpenClaw disabled (classifier not run). Adds ~5-15s; can misroute chat to research.
+        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
+            if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
+                fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+                if fallback == "web_lookup":
+                    intent = "search"
+                elif fallback == "web_research":
+                    intent = "research"
 
         if intent in ("research", "search", "browse"):
             logger.info("Router: intent=%r message=%r", intent, message[:80] + "..." if len(message) > 80 else message)
@@ -394,7 +460,12 @@ class Router:
 
         use_local = (provider or "local").lower() == "local"
         local_m = rag_model or local_model or OLLAMA_CHAT_MODEL
-        openrouter_m = openrouter_model or OLLAMA_REASONING_MODEL
+        openrouter_m = openrouter_model or OPENROUTER_MODEL
+
+        # App integration query (calendar, gmail, drive, tasks) but OpenClaw disabled
+        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
+            yield OPENCLAW_APP_UNAVAILABLE_MSG
+            return
 
         if use_local and self.ollama.is_available():
             try:

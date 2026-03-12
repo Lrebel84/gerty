@@ -379,11 +379,17 @@ def run_voice_loop(
                             except FuturesTimeoutError:
                                 reply = "That took too long. Please try again or ask something simpler."
                                 logger.warning("Voice response timed out after %ds", VOICE_RESPONSE_TIMEOUT)
+                            except Exception as e:
+                                reply = "Something went wrong. Please try again."
+                                logger.warning("Voice sync fallback failed: %s", e)
+                        if not reply:
+                            reply = "I couldn't generate a response. Please try again."
                         if on_assistant_content:
                             on_assistant_content(reply)
                         try:
                             audio = tts.synthesize(reply)
-                            AudioPlayback.play(audio, tts.get_sample_rate())
+                            if audio:
+                                AudioPlayback.play(audio, tts.get_sample_rate())
                         except Exception as e:
                             logger.debug("TTS playback failed: %s", e)
                     t_llm = time.perf_counter() - t1
@@ -402,6 +408,16 @@ def run_voice_loop(
                         logger.debug("TTS playback failed: %s", e)
             except Exception as e:
                 logger.warning("Voice processing failed: %s", e)
+                if text and not reply:
+                    try:
+                        err_msg = "Something went wrong. Please try again."
+                        if on_assistant_content:
+                            on_assistant_content(err_msg)
+                        audio = tts.synthesize(err_msg)
+                        if audio:
+                            AudioPlayback.play(audio, tts.get_sample_rate())
+                    except Exception as tts_err:
+                        logger.debug("Voice error TTS failed: %s", tts_err)
             finally:
                 if on_save_after_exchange:
                     try:

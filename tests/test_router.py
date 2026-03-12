@@ -107,6 +107,14 @@ class TestClassifyIntent:
         assert classify_intent("make a note get groceries") == "notes"
         assert classify_intent("note: buy eggs") == "notes"
 
+    def test_mcp_app_keywords_route_to_chat(self):
+        """Calendar, Gmail, Drive, Tasks queries use MCP tools, not browse."""
+        assert classify_intent("check my Google Calendar for what I've got on this week") == "chat"
+        assert classify_intent("what's on my calendar") == "chat"
+        assert classify_intent("check my gmail") == "chat"
+        assert classify_intent("show my emails") == "chat"  # "my emails" matches
+        assert classify_intent("what's in my Google Drive") == "chat"
+
     def test_browse_disabled_falls_through(self):
         """When GERTY_BROWSE_ENABLED is False (default), browse keywords fall through to chat."""
         from unittest.mock import patch

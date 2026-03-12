@@ -2,12 +2,15 @@
 
 A quick reference for tools and skills you can use with Gerty. Just type or say these phrases in chat, via voice, or in the Telegram bot.
 
+**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, action requests (calendar, email, files, browser) go to OpenClaw. Say what you want in natural language—no exact phrases needed.
+
 | Section | Tools |
 |---------|-------|
 | Time | Time, date, timezone, stopwatch |
 | Scheduling | Alarms, timers, pomodoro |
 | Utilities | Calculator, unit conversion, random, notes |
 | Info | Weather, web search, deep research (OpenRouter), interactive browsing (OpenRouter) |
+| Integrations | OpenClaw (files, browser, calendar, email when enabled) |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
@@ -173,6 +176,26 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Create spreadsheet | "find the best laptops and create a spreadsheet" / "analyze and report on electric cars under $40k" |
 
 *Requires OpenRouter (Settings → Provider → OpenRouter). Uses native web search (e.g. Grok 4.1 Fast :online) for multi-step research. Tables are saved to `data/research_*.csv`. Works for both typed chat and voice. When using local provider, Gerty will prompt you to switch to OpenRouter.*
+
+---
+
+## OpenClaw (action execution)
+
+*Requires `GERTY_OPENCLAW_ENABLED=1` in `.env` and OpenClaw installed (`npm install -g openclaw`). See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).*
+
+| Command | Example |
+|---------|---------|
+| Calendar | "What's in my calendar for tomorrow?" / "What have I got this week?" |
+| Gmail | "Check my latest three emails" / "Read my inbox" |
+| Drive | "What's in my Google Drive?" / "Check my drive" |
+| Tasks | "What's on my tasks?" / "Check my tasks" |
+| File ops | "Create a file with my meeting notes" / "Organize my downloads folder" |
+| Browser | "Open the site and fill out the form" / "Navigate to example.com" |
+| Automation | "Clear my inbox" / "Send a message to X" |
+
+*Gerty uses an LLM to understand your intent and reformulate the task for OpenClaw. Say what you want in natural language—no exact phrases needed.*
+
+*Setup:* Install OpenClaw (`npm install -g openclaw`), run `openclaw daemon start` (or use the desktop launcher—it starts automatically), add `GERTY_OPENCLAW_ENABLED=1` to Gerty's `.env`. Configure OpenClaw: create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (not Gerty's), add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search, run `openclaw onboard` or `openclaw configure --section web`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
 
 ---
 

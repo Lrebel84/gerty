@@ -11,6 +11,154 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.33] - 2026-03-12
+
+### MCP Removed – OpenClaw Handles App Integrations
+
+The MCP (Rube/Composio) integration has been removed. OpenClaw handles all app integrations (calendar, Gmail, Drive, Tasks, files, browser). This eliminates the 5–15s latency MCP added to every chat request.
+
+- **Router:** MCP block removed; `APP_INTEGRATION_KEYWORDS` (kept for routing) now direct to OpenClaw when enabled
+- **Config:** Removed `COMPOSIO_API_KEY`, `RUBE_MCP_URL`, `GERTY_MCP_ENABLED`, and related MCP vars
+- **Archive:** `gerty/mcp/` moved to `docs/archive/mcp/`; `docs/MCP_STATUS.md` and `scripts/test_mcp.py` archived
+- **Groq:** Removed `groq_client.py` (MCP-only); `GROQ_API_KEY` retained for STT
+
+### Router – Faster Chat, Correct Flow
+
+The OpenClaw classifier now runs **before** the web intent fallback. Simple questions (e.g. "tell me about The Sopranos") go straight to chat instead of being misrouted to research.
+
+- **Before:** Web fallback ran first → often misclassified chat as research → 15s + 15s delay
+- **After:** Classifier runs first → gerty → direct chat (one LLM call, few seconds)
+- **Web fallback:** Only runs when OpenClaw is disabled; avoids misrouting when classifier is used
+
+### Voice – Error Handling
+
+- Sync fallback now catches all exceptions (not just timeout)
+- User gets feedback ("Something went wrong. Please try again.") instead of silence when errors occur
+- Outer exception handler plays error message via TTS when processing fails
+
+### Docs
+
+- `docs/OPENCLAW_INTEGRATION.md` – Clarified classifier runs before web fallback
+- `docs/GERTY_OVERVIEW.md` – MCP removed from flow
+- `PERFORMANCE.md` – MCP section removed
+
+---
+
+## [0.8.32] - 2026-03-11
+
+### OpenClaw – Full Configuration
+
+OpenClaw is now configured with a dedicated setup: separate API key, correct model format, and web tools.
+
+#### Dedicated OpenRouter API Key
+
+- OpenClaw uses its own OpenRouter key from `~/.openclaw/.env`—separate from Gerty's key. Usage and limits are isolated.
+- Auth profile references `OPENROUTER_API_KEY` via SecretRef (env) instead of storing the key in JSON.
+- Launch script does not export Gerty's key to OpenClaw; documented in `scripts/launch_gerty.sh`.
+
+#### Model and Tools
+
+- **Model:** `openrouter/deepseek/deepseek-v3.2` (correct OpenRouter format).
+- **Tools:** `profile: "coding"` plus `group:web`—files, exec, sessions, memory, image, `web_search`, `web_fetch`.
+- **Web search:** Enabled; add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` to `~/.openclaw/.env`, or run `openclaw configure --section web`.
+
+#### Docs
+
+- `docs/OPENCLAW_INTEGRATION.md` – OpenClaw-specific config section (key, tools, web search).
+- `scripts/launch_gerty.sh` – Comment: do not export Gerty's `OPENROUTER_API_KEY`.
+
+---
+
+## [0.8.31] - 2025-03-11
+
+### OpenClaw Integration – Action Execution
+
+Gerty can route action requests to [OpenClaw](https://github.com/openclaw/openclaw) for file operations, browser control, calendar, email, and 7000+ skills. Gerty remains the voice and interface; OpenClaw is the execution backend.
+
+#### Architecture
+
+- **Layer 1 (Fast path):** Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, weather, random, RAG → instant Gerty tools (no classifier).
+- **Layer 2 (Smart routing):** For everything else, an LLM classifier decides: Gerty (chat, Q&A, search) or OpenClaw (action to execute). When routing to OpenClaw, the classifier reformulates the task for clarity.
+- **Layer 3:** Gerty reports back to the user even when OpenClaw does the work.
+
+#### MCP Migration
+
+When `GERTY_OPENCLAW_ENABLED=1`, MCP is bypassed. Calendar, Gmail, Drive, Tasks go to OpenClaw instead—OpenClaw handles app integrations better than Gerty's MCP (which is slow and temperamental).
+
+#### Config
+
+- `GERTY_OPENCLAW_ENABLED=1` – Enable OpenClaw routing
+- `OPENCLAW_GATEWAY_WS_URL` – Gateway URL (default `ws://127.0.0.1:18789/gateway`)
+- `OPENCLAW_AGENT_ID` – Agent to use (default `main`)
+- `OPENCLAW_TIMEOUT` – Execution timeout (default 120s)
+- `OPENCLAW_CLASSIFIER_MODEL` – Model for routing (default `openai/gpt-4o-mini`)
+- `OLLAMA_CLASSIFIER_MODEL` – Fallback when offline (default `llama3.2`)
+
+#### Desktop Launcher – Auto-start OpenClaw
+
+When launching Gerty from the app launcher (Super → "Gerty"), the OpenClaw daemon starts automatically in the background if `GERTY_OPENCLAW_ENABLED=1` and it isn't already running. No manual `openclaw daemon start` needed.
+
+#### New Files
+
+- `gerty/openclaw/client.py` – OpenClaw client (execute, is_reachable)
+- `gerty/llm/openclaw_classifier.py` – LLM-based routing classifier
+- `scripts/launch_gerty.sh` – Wrapper for desktop launcher (starts daemon, then Gerty)
+- `docs/OPENCLAW_INTEGRATION.md` – Setup, config, troubleshooting
+
+#### Docs
+
+- `docs/GERTY_OVERVIEW.md` – Updated flow diagram, OpenClaw routing
+- `docs/MCP_STATUS.md` – Note: OpenClaw bypasses MCP when enabled
+- `docs/OPENCLAW_INTEGRATION.md` – Full integration guide
+
+---
+
+## [0.8.30] - 2025-03-08
+
+### MCP (Rube/Composio) – Working for Calendar, Gmail, Drive, Tasks
+
+MCP integration now works for Google Calendar, Gmail, Drive, and Tasks. Multiple routing and tool-calling bugs were fixed.
+
+#### Routing Fixes
+
+- **Web intent fallback** – Skip when message matches `MCP_APP_KEYWORDS`. Calendar/Gmail queries were being reclassified as `web_lookup` → search; they now reach MCP.
+- **Email vs browse** – Added "emails", "check emails", "latest emails", "read my email" to `MCP_APP_KEYWORDS` so "check my latest three emails" routes to MCP, not browse.
+
+#### Tool-Calling Fixes
+
+- **OpenRouter Grok 4.1 Fast** – MCP always uses `OPENROUTER_MCP_MODEL` (default `x-ai/grok-4.1-fast`). Local LLMs are unreliable for tool orchestration.
+- **Calendar args wrapper** – Grok puts `time_min`/`time_max` in "thought" instead of `tools[].arguments`. We wrap the batch executor to infer the time range from the user message and inject correct params. Supports: today, tomorrow, this week, next week, this month, next Tuesday, etc.
+- **"This week" on weekend** – On Saturday/Sunday, "this week" now means the upcoming week (not the one ending today).
+- **Schema pre-fetch skip** – For calendar-only queries, skip the schema pre-fetch to save ~5–10s.
+- **Fallback when max rounds hit** – If the tool loop exits with no final text, make one more request without tools to get a summary.
+
+#### Config
+
+- `OPENROUTER_MCP_MODEL` – Model for MCP tool calls (default `x-ai/grok-4.1-fast`)
+- `GERTY_MCP_GROQ_FIRST=0` – Groq Remote MCP disabled by default (token limits)
+
+#### Known issue: Voice slowdown
+
+Enabling MCP has slowed regular voice chat from a few seconds to 10–15s per reply. Workaround: `GERTY_MCP_ENABLED=0` if voice latency is critical. See `docs/MCP_STATUS.md` and `PERFORMANCE.md`.
+
+#### Docs
+
+- `docs/MCP_STATUS.md` – Status, architecture, fixes
+- `PERFORMANCE.md` – MCP voice slowdown note
+- COMMANDS.md – App Actions section updated
+
+---
+
+## [0.8.29] - 2025-03-08
+
+### MCP (Rube/Composio) Integration – Initial Attempt (Superseded by 0.8.30)
+
+*See 0.8.30 for working MCP integration.*
+
+Initial MCP integration for Google Calendar, Gmail, Drive, Tasks via Rube. Routing and tool-calling bugs prevented it from working until 0.8.30.
+
+---
+
 ## [0.8.28] - 2025-03-08
 
 ### Intent-Based Search Routing

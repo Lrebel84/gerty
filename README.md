@@ -2,16 +2,18 @@
 
 Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your machine.
 
+**See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md)** for developer onboarding: architecture, request flow, API, and how to extend.
+
 ## Features
 
 - **Chat UI**: Modern dark-themed desktop app with chat window and extensible sidebar
 - **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop. Say **"bye"**, **"thanks"**, **"stop"** to end the conversation; say the wake word during auto-listen to stop listening.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
-- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**
+- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**, **OpenClaw** (action execution: files, browser, calendar, email when enabled)
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search`. Routes by intent: "search for X", "get me contact details for Y", "when is showtimes of Z", etc. OpenRouter uses quick search for simple lookups.
-- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. LLM intent fallback routes ambiguous chat queries to web when needed. See COMMANDS.md.
+- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. When OpenClaw is enabled, the classifier runs first—simple chat (e.g. "tell me about X") goes straight to chat, not research. See COMMANDS.md.
 - **Interactive browsing** (OpenRouter, opt-in): Navigate, click, fill forms. Requires Python 3.11+, `GERTY_BROWSE_ENABLED=1`, and `pip install browser-use playwright` + `python -m playwright install chromium`. See COMMANDS.md.
 
 ## Setup
@@ -55,6 +57,7 @@ cp .env.example .env
 # - PICOVOICE_ACCESS_KEY for wake word (free at console.picovoice.ai)
 # - GERTY_SYSTEM_TOOLS=1 for system commands and app launching (lock, suspend, open apps)
 # - GERTY_BROWSE_ENABLED=1 for interactive browsing (requires Python 3.11+, browser-use, playwright)
+# - GERTY_OPENCLAW_ENABLED=1 for OpenClaw (files, browser, calendar, email; see docs/OPENCLAW_INTEGRATION.md)
 ```
 
 ### 3. Start Ollama (for local LLM)
@@ -121,6 +124,23 @@ This installs a `.desktop` file so you can:
 - **Launch** Gerty from the app launcher (Super key → search "Gerty")
 - **Pin to dock** – Launch Gerty, then right-click its dock icon → "Pin to dock"
 - **Close cleanly** – Clicking the window X button fully exits the app (no lingering process)
+- **OpenClaw auto-start** – When `GERTY_OPENCLAW_ENABLED=1`, the OpenClaw daemon starts automatically in the background when you launch Gerty from the app launcher
+
+### 7. OpenClaw (optional – action execution)
+
+When enabled, Gerty routes action requests (files, browser, calendar, email) to OpenClaw. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
+
+```bash
+# Install OpenClaw (Node.js 22+)
+npm install -g openclaw@latest
+
+# Set in Gerty's .env
+GERTY_OPENCLAW_ENABLED=1
+```
+
+**OpenClaw config:** OpenClaw uses its own config and keys in `~/.openclaw/`. Create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (separate from Gerty). Add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search. Run `openclaw onboard` or `openclaw configure --section web` to set up.
+
+When using the desktop launcher, the daemon starts automatically. Otherwise run `openclaw daemon start` before using Gerty.
 
 ## Usage
 
@@ -130,7 +150,7 @@ python -m gerty
 
 Or launch from your application launcher after running `./scripts/install_desktop.sh`.
 
-**See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram.
+**See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram. **See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md)** for OpenClaw setup.
 
 **See [PERFORMANCE.md](PERFORMANCE.md)** – Benchmarks and tips (e.g. Qwen &lt;1s vs Gemma ~6s first response; RAG toggle for speed).
 
@@ -157,6 +177,7 @@ gerty/
 │   ├── llm/             # Ollama, OpenRouter, router
 │   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
+│   ├── openclaw/        # OpenClaw client (action execution when enabled)
 │   ├── research/        # Deep research: OpenRouter :online, table parsing, CSV output
 │   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision
 │   ├── telegram/        # Telegram bot
@@ -166,5 +187,5 @@ gerty/
 │   └── rag/             # ChromaDB + index metadata
 ├── frontend/            # React SPA
 ├── models/              # Vosk, Piper models
-└── scripts/             # Install helpers
+└── scripts/             # Install helpers, launch_gerty.sh (desktop launcher wrapper)
 ```

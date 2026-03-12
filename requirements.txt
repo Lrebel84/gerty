@@ -43,6 +43,9 @@ psutil>=5.9.0
 # Screen capture (screen_vision tool)
 mss>=9.0.0
 
+# OpenClaw - action execution (files, browser, calendar, email). Optional: GERTY_OPENCLAW_ENABLED=1
+openclaw-sdk>=2.1.0
+
 # RAG
 chromadb>=0.4.0
 pypdf>=4.0.0
