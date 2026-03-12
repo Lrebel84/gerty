@@ -57,7 +57,7 @@ cp .env.example .env
 # - PICOVOICE_ACCESS_KEY for wake word (free at console.picovoice.ai)
 # - GERTY_SYSTEM_TOOLS=1 for system commands and app launching (lock, suspend, open apps)
 # - GERTY_BROWSE_ENABLED=1 for interactive browsing (requires Python 3.11+, browser-use, playwright)
-# - GERTY_OPENCLAW_ENABLED=1 for OpenClaw (files, browser, calendar, email; see docs/OPENCLAW_INTEGRATION.md)
+# - GERTY_OPENCLAW_ENABLED=1 for OpenClaw (files, browser, calendar, email; see docs/OPENCLAW_INTEGRATION.md). Note: OpenClaw may return invented responses; see docs/OPENCLAW_DIAGNOSIS.md.
 ```
 
 ### 3. Start Ollama (for local LLM)
@@ -140,7 +140,11 @@ GERTY_OPENCLAW_ENABLED=1
 
 **OpenClaw config:** OpenClaw uses its own config and keys in `~/.openclaw/`. Create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (separate from Gerty). Add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search. Run `openclaw onboard` or `openclaw configure --section web` to set up. To use Grok 4.1 fast, set `agents.defaults.model.primary` to `openrouter/x-ai/grok-4.1-fast` in `~/.openclaw/openclaw.json`.
 
-When using the desktop launcher, the daemon starts automatically. Otherwise run `openclaw daemon start` before using Gerty.
+**Exec approvals (critical):** Gerty is headless—no one approves exec commands. **Recommended:** Set `security: "full"` and `ask: "off"` in `~/.openclaw/exec-approvals.json` and `~/.openclaw/openclaw.json`, then install **dcg-guard** (`clawhub install dcg-guard`, `bash install.sh` in skill dir) to block destructive commands. Alternative: use allowlist mode. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
+
+**gog (Google Workspace):** For Gmail/Calendar/Drive/Sheets/Docs via the gog skill, run `./scripts/install_gog.sh` on Linux, then `gog auth credentials <path>` and `gog auth add <email> --services ...`. See [docs/GOOGLE_OAUTH_SETUP.md](docs/GOOGLE_OAUTH_SETUP.md).
+
+When using the desktop launcher, the daemon starts automatically. Otherwise run `openclaw daemon start` before using Gerty. If gateway shows unreachable despite systemd "running", try `systemctl --user restart openclaw-gateway`.
 
 ## Usage
 
@@ -189,3 +193,14 @@ gerty/
 ├── models/              # Vosk, Piper models
 └── scripts/             # Install helpers, launch_gerty.sh (desktop launcher wrapper)
 ```
+
+## Development / Git
+
+Use SSH for push/pull so you don't need to enter tokens. Cursor and OpenClaw (when exec runs with your SSH agent) can push without prompts.
+
+1. **Create the repo** (if needed): [github.com/new](https://github.com/new) → name it `gerty` → **don't** add README/license (you're pushing existing code)
+2. **Add your SSH key to GitHub**: [Settings → SSH and GPG keys](https://github.com/settings/keys) → New SSH key → paste `cat ~/.ssh/id_ed25519.pub`
+3. **Set remote**: `git remote set-url origin git@github.com:YOUR_USERNAME/gerty.git`
+4. **Push**: `git push -u origin master`
+
+**Stable branch:** `stable` is a known-good checkpoint. Work on `master`; when happy with a milestone, update stable: `git checkout stable && git merge master && git push && git checkout master`. To revert: `git reset --hard stable`.

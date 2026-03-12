@@ -113,7 +113,7 @@ The router uses **keyword-based** intent classification. Order matters: specific
 
 | Intent | Example keywords |
 |--------|------------------|
-| time | "time", "what time", "current time" |
+| time | "what time", "what's the time", "current time", "tell me the time" |
 | date | "date", "today's date" |
 | alarm | "alarm", "set alarm", "wake me" |
 | timer | "timer", "countdown" |
@@ -132,7 +132,7 @@ The router uses **keyword-based** intent classification. Order matters: specific
 | sys_monitor | "cpu usage", "memory usage" |
 | chat / complex | Fallback; may trigger web intent fallback |
 
-**OpenClaw (when enabled):** Option A—everything except fast-path goes to OpenClaw. Gerty passes full chat history and custom prompt. When the daemon is unreachable, Gerty falls back to Ollama/OpenRouter chat. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md).
+**OpenClaw (when enabled):** Option A—everything except fast-path goes to OpenClaw. Gerty passes full chat history and custom prompt. When the daemon is unreachable, Gerty falls back to Ollama/OpenRouter chat. **Headless:** Use `security: "full"` + `ask: "off"` with **dcg-guard** (blocks rm -rf, destructive git, etc.), or allowlist commands. **Caveat:** OpenClaw/Grok sometimes returns invented responses instead of using tools; behaviour is inconsistent. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) and [docs/OPENCLAW_DIAGNOSIS.md](OPENCLAW_DIAGNOSIS.md).
 
 ---
 
@@ -146,7 +146,7 @@ Key environment variables (see `.env.example`):
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Cloud LLM |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS` | Telegram bot |
 | `PICOVOICE_ACCESS_KEY` | Wake word |
-| `GERTY_OPENCLAW_ENABLED` | OpenClaw integration (files, browser, calendar, email). OpenClaw uses `~/.openclaw/.env` for its own keys. |
+| `GERTY_OPENCLAW_ENABLED` | OpenClaw integration (files, browser, calendar, email, exec on host, ClawHub skills). OpenClaw uses `~/.openclaw/.env` for its own keys. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) for self-improvement setup. |
 | `GERTY_BROWSE_ENABLED` | Interactive browsing |
 | `GERTY_SYSTEM_TOOLS` | System commands, app launch |
 

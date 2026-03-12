@@ -21,10 +21,12 @@ from gerty.utils.math_extract import extract_math
 logger = logging.getLogger(__name__)
 
 # Fast path: instant Gerty tools—skip OpenClaw classifier
+# Calendar routes to OpenClaw (has gerty-calendar skill); CalendarTool used only when OpenClaw is down
 FAST_PATH_INTENTS = ("time", "date", "alarm", "timer", "calculator", "units", "notes", "stopwatch", "timezone", "weather", "random", "rag")
 
 # Keywords for intent classification
-TIME_KEYWORDS = ["time", "what time", "current time", "what's the time"]
+# Explicit time queries only—bare "time" was too broad ("do we have time", "it's time to set up")
+TIME_KEYWORDS = ["what time", "current time", "what's the time", "what time is it", "tell me the time"]
 DATE_KEYWORDS = ["date", "what date", "today's date", "what day", "what's the date"]
 ALARM_KEYWORDS = [
     "alarm", "set alarm", "wake me", "remind me at",
@@ -43,6 +45,11 @@ NOTES_KEYWORDS = ["note:", "note ", "notes", "remember", "add note", "remind me"
 STOPWATCH_KEYWORDS = ["stopwatch", "how long has", "elapsed"]
 TIMEZONE_KEYWORDS = ["time in", "timezone", "time zone", "what time in"]
 WEATHER_KEYWORDS = ["weather", "forecast", "temperature"]
+CALENDAR_KEYWORDS = [
+    "calendar", "my calendar", "check my calendar", "what's on my calendar",
+    "my schedule", "calendar for", "check calendar", "what have i got on",
+    "what do i have on", "what's on", "schedule for",
+]
 RAG_KEYWORDS = [
     "check documentation", "check docs", "check my docs",
     "retrieve", "search my docs", "search documentation",
@@ -142,6 +149,9 @@ def classify_intent(text: str) -> str:
     for kw in WEATHER_KEYWORDS:
         if kw in lower:
             return "weather"
+    for kw in CALENDAR_KEYWORDS:
+        if kw in lower:
+            return "calendar"
     for kw in RAG_KEYWORDS:
         if kw in lower:
             return "rag"
@@ -173,10 +183,7 @@ def classify_intent(text: str) -> str:
         if kw in lower:
             return "stopwatch"
     for kw in TIME_KEYWORDS:
-        if kw == "time":
-            if re.search(r"\btime\b", lower):
-                return "time"
-        elif kw in lower:
+        if kw in lower:
             return "time"
     for kw in DATE_KEYWORDS:
         if kw == "date":
@@ -286,6 +293,16 @@ OPENCLAW_APP_UNAVAILABLE_MSG = (
     "run `openclaw daemon start`, and configure your integrations. See docs/OPENCLAW_INTEGRATION.md."
 )
 
+# Tool-use instructions appended to OpenClaw system context to reduce hallucination
+OPENCLAW_TOOL_INSTRUCTIONS = (
+    " When performing actions (calendar, skills, exec, web search), you MUST use the available tools. "
+    "Never invent or guess results. If you need to run a command, use exec. "
+    "Do NOT pass security or ask params to exec—use the configured defaults (full access). "
+    "If you need to check the calendar, run the gerty calendar script via exec. "
+    "If you need to install a skill, use `clawhub install <slug>` via exec—never use `openclaw skills install` (that command does not exist). "
+    "ClawHub slug format: use the skill name only (e.g. `gog`), not owner/name. For URL https://clawhub.ai/steipete/gog use `clawhub install gog`. If `clawhub install owner/name` fails with Invalid slug, retry with `clawhub install <skill-name>` (the last path segment). Use `clawhub inspect <slug>` to verify the slug exists first."
+)
+
 
 class Router:
     """Routes messages to tools or LLM backends."""
@@ -318,10 +335,13 @@ class Router:
         # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
         if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
             from gerty.openclaw.client import execute as openclaw_execute
-            response = openclaw_execute(message, history=history, system_context=custom_prompt)
+            openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
+            response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
             if response != OPENCLAW_UNAVAILABLE_MSG:
                 return response
-            # Fallback: OpenClaw down — continue to Gerty chat
+            # Fallback: OpenClaw down — use CalendarTool for calendar, else continue to Gerty chat
+            if intent == "calendar" and self._tool_executor:
+                return self._tool_executor("calendar", message)
 
         # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
         if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
@@ -389,14 +409,22 @@ class Router:
             return
 
         # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
+        # Use execute() (non-streaming) — streaming was causing raw tool output to leak into replies
         if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
             from gerty.openclaw.client import execute as openclaw_execute
-            response = openclaw_execute(message, history=history, system_context=custom_prompt)
+            yield "Working on it..."
+            openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
+            response = openclaw_execute(
+                message, history=history, system_context=openclaw_prompt
+            )
             if response != OPENCLAW_UNAVAILABLE_MSG:
-                yield "Working on it..."
                 yield response
                 return
-            # Fallback: OpenClaw down — continue to Gerty chat
+            # Fallback: OpenClaw down — use CalendarTool for calendar
+            if intent == "calendar" and self._tool_executor:
+                result = self._tool_executor("calendar", message)
+                yield result
+                return
 
         # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
         if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:

@@ -11,6 +11,136 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.39] - 2026-03-12
+
+### OpenClaw – Full Exec Access, DCG Guard, Self-Improving Agent
+
+#### Full access + guardrails
+
+- **Exec security:** Switched to `security: "full"` and `ask: "off"` in both `~/.openclaw/exec-approvals.json` and `~/.openclaw/openclaw.json` so Gerty can run commands, write Gmail drafts, create calendar events, and use mkdir/touch without allowlist friction.
+- **DCG Guard:** Installed dcg-guard plugin (`clawhub install dcg-guard` + `bash install.sh`) to block destructive commands (rm -rf, git push --force, git reset --hard, etc.) before execution. Safe commands pass; dangerous ones are blocked.
+- **Prompt fix:** Added to OPENCLAW_TOOL_INSTRUCTIONS: "Do NOT pass security or ask params to exec—use the configured defaults (full access)." Prevents the model from overriding with allowlist.
+
+#### Self-improving-agent
+
+- **Installed and ready:** self-improving-agent skill installed via ClawHub. `.learnings/` directory and log files (LEARNINGS.md, ERRORS.md, FEATURE_REQUESTS.md) created. Gerty logs corrections, errors, and feature requests automatically; entries can be promoted to AGENTS.md, SOUL.md, TOOLS.md.
+
+#### Docs
+
+- **OPENCLAW_INTEGRATION.md** — Option A (full access + DCG Guard) documented as recommended; Option B (allowlist) retained.
+- **README.md** — Exec approvals section updated to mention full access + DCG Guard option.
+- **GERTY_OVERVIEW.md** — Headless note updated for full access option.
+
+---
+
+## [0.8.38] - 2026-03-12
+
+### OpenClaw – Exec Approval, gog, and Empty Response Fixes
+
+#### Problems Encountered
+
+1. **"OpenClaw completed but returned no output"** — Root cause: Gerty is headless; with `ask: "on-miss"` in exec-approvals, unallowlisted commands waited for approval that never came, timed out, and the agent returned empty.
+2. **Gateway unreachable** — systemd showed gateway "running" but port 18789 was not listening. Restarting the gateway fixed it; cause unclear (stale process or bind failure).
+3. **ClawHub "Invalid slug"** — Installing from `https://clawhub.ai/steipete/gog` failed because the CLI expects skill name only (`gog`), not `owner/name` (`steipete/gog`).
+4. **"time" keyword too broad** — Phrases like "do we have time to set up" or "it's time to do the OAuth" triggered the clock instead of routing to OpenClaw.
+5. **gog not installed on Linux** — The gog skill assumed macOS/brew; no Linux install path.
+
+#### Fixes Applied
+
+- **Exec approvals:** Set `ask: "off"` for main agent and expanded allowlist (find, which, grep, cat, xargs, basename, dirname, env, gog). Prevents approval timeouts for headless Gerty.
+- **ClawHub slug:** Added guidance to OPENCLAW_TOOL_INSTRUCTIONS and clawhub skill: use skill name only (e.g. `gog`), not `owner/name`.
+- **Time intent:** Restricted to explicit queries only: "what time", "what's the time", "what time is it", "current time", "tell me the time". Bare "time" no longer triggers.
+- **gog on Linux:** Added `scripts/install_gog.sh` to download and install gog from GitHub releases. Updated gog skill with Linux install instructions.
+- **Bridge history:** Increased from 20 to 50 messages (fallback path).
+- **History:** Full chat history sent to OpenClaw (no cap; Grok has 2M token context).
+
+#### Not Yet Confirmed Fixed
+
+- **Gateway unreachability** — Restart fixed it; may recur. If `openclaw status` shows "unreachable" but systemd says running, try `systemctl --user restart openclaw-gateway`.
+- **gog OAuth** — `gog auth credentials` runs via OpenClaw. User must run `gog auth add you@gmail.com --services ...` manually in a terminal (browser flow).
+
+#### Docs
+
+- **OPENCLAW_INTEGRATION.md** — Exec approval note for headless; ClawHub slug format.
+- **OPENCLAW_DIAGNOSIS.md** — "No output" section; exec approval timeout as primary cause for headless.
+- **GOOGLE_OAUTH_SETUP.md** — gog OAuth section (Step 5).
+- **skills/gog/SKILL.md** — Linux install via `./scripts/install_gog.sh`.
+
+---
+
+## [0.8.37] - 2026-03-12
+
+### OpenClaw – Calendar Skill, Hallucination Diagnosis, and Fallbacks
+
+#### Calendar
+
+- **gerty-calendar skill** (`skills/calendar/SKILL.md`) – Teaches OpenClaw to run `scripts/check_google_calendar.py` via exec for calendar queries. Uses existing OAuth token at `~/.openclaw/credentials/google-token.json`.
+- **Calendar routing** – Calendar no longer on fast path; routes to OpenClaw when enabled. **CalendarTool** used only when OpenClaw daemon is unreachable.
+- **CalendarTool** – Gerty-side tool that runs the calendar script directly; fallback when OpenClaw is down.
+
+#### OpenClaw Hallucination (Not Working as Expected)
+
+- **Observed behaviour:** OpenClaw/Grok sometimes returns plausible-sounding responses that are **completely invented**—e.g. claimed to install skills from ClawHub but used a non-existent command (`openclaw skills install`), invented skill names, and reported success when nothing was installed.
+- **Verification:** `openclaw agent --agent main --message 'Run: echo HELLO_VERIFY'` **does** execute tools and return real output on this setup. So exec works when invoked directly.
+- **Likely cause:** Grok (the model) sometimes **chooses not to use tools** and instead invents a response. Model behaviour, not necessarily an OpenClaw tool-execution bug.
+- **Known OpenClaw bug #39971:** Some users report the main agent outputs tool-call text instead of executing. Fix PR #43365 is open. If you see `exec(command: "...")` as plain text instead of real output, you may be affected.
+- **Docs:** `docs/OPENCLAW_DIAGNOSIS.md` – Full diagnosis, verification steps, and options.
+
+#### Diagnostics
+
+- **check_openclaw.sh** – New section 6: tool execution test. Asks main agent to run `echo TOOL_TEST_OK`; reports OK if real output, BUG if tool-call text instead.
+- **OPENCLAW_INTEGRATION.md** – Troubleshooting link to diagnosis doc for invented/fake responses.
+
+#### Docs
+
+- **OPENCLAW_INTEGRATION.md** – Root cause for wrong calendar data: missing skill (now added). Google setup references gerty-calendar skill.
+- **GOOGLE_OAUTH_SETUP.md** – Calendar uses skill; custom prompt only for Gmail/Drive/Sheets/Docs.
+
+#### Caveat
+
+OpenClaw integration is not fully reliable. Until the model consistently uses tools (or upstream fixes ship), **verify critical actions** (e.g. "list my skills", "run ls", calendar) before trusting responses. Use Gerty tools for time-sensitive paths when possible.
+
+---
+
+## [0.8.36] - 2026-03-12
+
+### OpenClaw – Self-Improvement Config (PC/terminal, ClawHub, web search)
+
+OpenClaw can now run commands on the host, install skills from ClawHub, control apps, and use web search—enabling Gerty to improve itself from your instructions without Cursor.
+
+#### Config
+
+- **Workspace:** `agents.defaults.workspace` in `~/.openclaw/openclaw.json` set to Gerty project root for file edits and skill installs.
+- **Exec on gateway:** `tools.exec.host: "gateway"` so commands run on your PC, not sandbox.
+- **Exec approvals:** `~/.openclaw/exec-approvals.json` with allowlist for gtk-launch, clawhub, npm, python, etc.
+- **Web search:** `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` in `~/.openclaw/.env`.
+- **Timeout:** Client now uses `OPENCLAW_TIMEOUT` (default 120s) instead of hardcoded 15s for long tasks (skill installs, multi-step edits).
+- **History:** Removed 20-message cap; full chat history is now sent to OpenClaw.
+
+### OpenClaw – Streaming Responses
+
+- **execute_stream():** New streaming client that yields content chunks as they arrive from OpenClaw.
+- **Tool feedback:** Brief status messages ("Searching...", "Running...", "Fetching...") when OpenClaw invokes tools.
+- **Router:** `route_stream` now uses `execute_stream` instead of `execute`—no more long wait for full response.
+
+#### ClawHub
+
+- `clawhub login` or `clawhub login --token <token>` for headless auth.
+- `clawhub install <skill>` installs into workspace `./skills` when `CLAWHUB_WORKDIR` or exec workdir matches.
+
+#### Docs
+
+- `docs/OPENCLAW_INTEGRATION.md` – Self-improvement setup section (workspace, exec approvals, ClawHub, web search, custom prompt, verification).
+- `.env.example` – `OPENCLAW_TIMEOUT` note for long-running tasks.
+
+### Git / Development
+
+- **SSH workflow:** README Development/Git section – use SSH for push/pull so Cursor and OpenClaw can push without token prompts.
+- **Stable branch:** `stable` branch for known-good checkpoints; update with `git checkout stable && git merge master && git push && git checkout master`.
+- **.gitignore:** Added `gerty.log`, `gerty_debug.log`, `research_*.csv`, `.cursor/`, `models/wakeword/`, `frontend/dist/`.
+
+---
+
 ## [0.8.35] - 2026-03-12
 
 ### OpenClaw – Option A Routing, History, and Persona
@@ -1144,3 +1274,4 @@ RAG and memory injection removed from pipeline; voice path optimized for low lat
 
 - **Restart required for STT changes** – Changing STT backend or model in Settings requires restarting the app.
 - **Hallucination on non-RAG topics** – When asked about things not in memory/docs (e.g. movies), the model answers from training and may invent facts (e.g. wrong cast). RAG context is irrelevant in those cases. *Expected LLM behaviour; consider grounding external queries.*
+- **OpenClaw sometimes invents instead of using tools** – OpenClaw/Grok may return plausible but fake responses (e.g. claimed skill installs that never happened). Tools can work (verify with `openclaw agent --agent main --message 'Run: echo X'`), but behaviour is inconsistent. See `docs/OPENCLAW_DIAGNOSIS.md`. Use Gerty tools for critical paths (calendar fallback, etc.) until reliable.
