@@ -1,6 +1,6 @@
 """Tests for LLM router intent classification and parsing."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,6 +8,7 @@ from gerty.llm.router import (
     _classify_web_intent_fallback,
     classify_intent,
     parse_timer_duration,
+    Router,
 )
 from gerty.tools.number_words import normalize_time_words
 
@@ -168,6 +169,76 @@ class TestClassifyWebIntentFallback:
         ollama.chat.side_effect = Exception("timeout")
         openrouter = MagicMock()
         assert _classify_web_intent_fallback("any query", ollama, openrouter) == "no_web"
+
+
+class TestRouterOpenClawOptionA:
+    """Tests for Option A: everything to OpenClaw except fast-path; fallback to Gerty when unreachable."""
+
+    @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
+    def test_non_fast_path_routes_to_openclaw_when_enabled(self):
+        """Search, research, browse, chat all go to OpenClaw when enabled."""
+        with patch("gerty.openclaw.client.execute") as mock_execute:
+            mock_execute.return_value = "Result from OpenClaw"
+            tool_executor = MagicMock()
+            router = Router(tool_executor=tool_executor)
+            result = router.route("search for Python tutorial")
+            assert result == "Result from OpenClaw"
+            mock_execute.assert_called_once()
+            call_args = mock_execute.call_args
+            assert call_args[0][0] == "search for Python tutorial"
+            assert call_args[1].get("history") is None
+            assert call_args[1].get("system_context") is None
+
+    @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
+    def test_openclaw_receives_history_and_system_context(self):
+        """OpenClaw execute receives history and custom_prompt when provided."""
+        with patch("gerty.openclaw.client.execute") as mock_execute:
+            mock_execute.return_value = "Chat response"
+            router = Router(tool_executor=MagicMock())
+            history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
+            result = router.route("we're testing", history=history, custom_prompt="You are Gerty.")
+            assert result == "Chat response"
+            mock_execute.assert_called_once_with(
+                "we're testing",
+                history=history,
+                system_context="You are Gerty.",
+            )
+
+    @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
+    def test_fallback_to_gerty_when_openclaw_unavailable(self):
+        """When OpenClaw returns unavailable msg, fall through to Gerty chat."""
+        from gerty.openclaw.client import OPENCLAW_UNAVAILABLE_MSG
+
+        with patch("gerty.openclaw.client.execute") as mock_execute:
+            mock_execute.return_value = OPENCLAW_UNAVAILABLE_MSG
+            router = Router(tool_executor=MagicMock())
+            router.ollama = MagicMock()
+            router.ollama.is_available.return_value = True
+            router.ollama.chat.return_value = "Ollama chat response"
+            result = router.route("hello", history=[])
+            assert result == "Ollama chat response"
+            mock_execute.assert_called_once()
+
+    @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", False)
+    def test_search_falls_back_to_gerty_when_openclaw_disabled(self):
+        """When OpenClaw disabled, search goes to tool executor or OpenRouter."""
+        tool_executor = MagicMock(return_value="DuckDuckGo results")
+        router = Router(tool_executor=tool_executor)
+        with patch("gerty.llm.router.GERTY_WEB_INTENT_FALLBACK", False):
+            result = router.route("search for Python tutorial")
+        tool_executor.assert_called_with("search", "search for Python tutorial")
+        assert result == "DuckDuckGo results"
+
+    @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
+    def test_fast_path_skips_openclaw(self):
+        """Fast-path intents (time, alarm, etc.) go to tool executor, not OpenClaw."""
+        with patch("gerty.openclaw.client.execute") as mock_execute:
+            tool_executor = MagicMock(return_value="14:30")
+            router = Router(tool_executor=tool_executor)
+            result = router.route("what time is it")
+            assert result == "14:30"
+            mock_execute.assert_not_called()
+            tool_executor.assert_called_with("time", "what time is it")
 
 
 class TestParseTimerDuration:

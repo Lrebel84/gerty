@@ -2,13 +2,13 @@
 
 Gerty can route action requests to [OpenClaw](https://github.com/openclaw/openclaw), an autonomous AI that executes tasks (files, browser, calendar, email, etc.). Gerty remains your voice and interface; OpenClaw is the execution backend.
 
-## How It Works
+## How It Works (Option A)
 
-1. **Fast path:** Obvious Gerty tools (time, alarm, timer, calculator, notes, weather, RAG) skip the classifier—instant response.
-2. **Classifier:** For everything else, an LLM decides: Gerty (chat, Q&A, search) or OpenClaw (action to execute). The classifier runs *before* any web-intent fallback, so simple questions (e.g. "tell me about The Sopranos") go straight to chat—no extra LLM call or misrouting to research.
-3. **OpenClaw:** When the classifier routes to OpenClaw, Gerty reformulates the task and passes it to OpenClaw. Gerty reports the result back to you.
+1. **Fast path:** Obvious Gerty tools (time, alarm, timer, calculator, notes, weather, RAG) go to Gerty—instant response.
+2. **OpenClaw:** Everything else goes to OpenClaw when enabled. Gerty passes your message plus full chat history and custom prompt (persona) to OpenClaw.
+3. **Fallback:** When the OpenClaw daemon is unreachable, Gerty falls back to Ollama or OpenRouter chat.
 
-OpenClaw handles calendar, Gmail, Drive, Tasks, files, browser, and more.
+OpenClaw handles web search, research, browse, calendar, Gmail, Drive, Tasks, files, browser, and more. No classifier—simple routing.
 
 ## Setup
 
@@ -52,11 +52,28 @@ Optional:
 OPENCLAW_GATEWAY_WS_URL=ws://127.0.0.1:18789/gateway
 OPENCLAW_AGENT_ID=main
 OPENCLAW_TIMEOUT=120
-OPENCLAW_CLASSIFIER_MODEL=openai/gpt-4o-mini
-OLLAMA_CLASSIFIER_MODEL=llama3.2
+OPENCLAW_MODEL=openrouter/x-ai/grok-4.1-fast
+OPENCLAW_HISTORY_MAX_MESSAGES=20
 ```
 
-### 4. Configure OpenClaw
+### 4. Configure OpenClaw model (Grok 4.1 fast)
+
+To use Grok 4.1 fast (same as Gerty's LLM), set the model in OpenClaw's config. Edit `~/.openclaw/openclaw.json`:
+
+```json
+"agents": {
+  "defaults": {
+    "model": {
+      "primary": "openrouter/x-ai/grok-4.1-fast"
+    },
+    ...
+  }
+}
+```
+
+Or run `openclaw configure` and select the model. OpenClaw uses its own config; Gerty's `OPENCLAW_MODEL` env var is for documentation—the actual model is set in `~/.openclaw/openclaw.json`.
+
+### 5. Configure OpenClaw integrations
 
 Set up your Google/calendar/email integrations in OpenClaw (skills or channels). Gerty passes requests through; OpenClaw performs the actions.
 
@@ -76,6 +93,12 @@ OpenClaw uses its own config and API keys, separate from Gerty. Key locations:
 
 **Tools:** OpenClaw is configured with `profile: "coding"` plus `group:web` (files, exec, sessions, memory, image, web search, web fetch). See [OpenClaw tools docs](https://docs.openclaw.ai/tools/index) for more.
 
+## Custom prompt and history
+
+- **Custom prompt:** Gerty's Settings custom prompt (e.g. "You are Gerty, the helpful assistant to Liam") is passed to OpenClaw as system context with each message.
+- **Chat history:** Gerty sends the full chat history (last N messages, configurable via `OPENCLAW_HISTORY_MAX_MESSAGES`) so OpenClaw has conversation context.
+- **New chat:** When you click "New chat", Gerty clears both local history and the OpenClaw session.
+
 ## Config Reference
 
 | Variable | Default | Purpose |
@@ -84,23 +107,45 @@ OpenClaw uses its own config and API keys, separate from Gerty. Key locations:
 | `OPENCLAW_GATEWAY_WS_URL` | `ws://127.0.0.1:18789/gateway` | OpenClaw WebSocket gateway |
 | `OPENCLAW_AGENT_ID` | `main` | OpenClaw agent to use |
 | `OPENCLAW_TIMEOUT` | `120` | Execution timeout (seconds) |
-| `OPENCLAW_CLASSIFIER_MODEL` | `openai/gpt-4o-mini` | Model for routing (OpenRouter) |
-| `OLLAMA_CLASSIFIER_MODEL` | `llama3.2` | Fallback classifier when offline |
+| `OPENCLAW_MODEL` | `openrouter/x-ai/grok-4.1-fast` | Documented model; set in `~/.openclaw/openclaw.json` |
+| `OPENCLAW_HISTORY_MAX_MESSAGES` | `20` | Max messages to include in history context |
+
+## Testing the Connection
+
+Say **"list my skills"** (or "list skills") to verify OpenClaw is connected. This routes to OpenClaw and returns your installed skills. If you see the skills list, the daemon and auth are working.
+
+## Routing Summary
+
+| Intent | Handler | When |
+|--------|---------|------|
+| time, date, alarm, timer, calculator, units, notes, weather, random, RAG | Gerty (instant) | Always |
+| Everything else | OpenClaw | When `GERTY_OPENCLAW_ENABLED=1` |
+| Fallback | Ollama or OpenRouter | When OpenClaw daemon unreachable |
 
 ## Troubleshooting
 
 **"I know what you want, but my action system isn't running right now"**
 
-OpenClaw daemon is not reachable. Start it with:
+OpenClaw daemon is not reachable. Gerty will fall back to Ollama/OpenRouter chat. Start OpenClaw with:
 
 ```bash
 openclaw daemon start
 ```
 
-**Classifier always routes to Gerty**
-
-Ensure you have `OPENROUTER_API_KEY` (or Ollama running) for the classifier. The classifier uses OpenRouter first, Ollama as fallback.
-
 **OpenClaw executes but returns nothing useful**
 
 Configure OpenClaw with the required skills (calendar, Gmail, etc.). Gerty only passes the request; OpenClaw must have the integrations set up.
+
+**"My action system isn't running" – daemon not starting?**
+
+OpenClaw requires **Node.js 22+**. If your system `node` is v20 (e.g. from `/usr/bin/node`), the daemon won't start. The launch script puts `/usr/local/bin` first in PATH so Node 22 (if installed there) is used. Install Node 22 via [NodeSource](https://github.com/nodesource/distributions) or ensure `node --version` shows v22+ when the desktop launcher runs.
+
+Run the diagnostic: `./scripts/check_openclaw.sh`. It checks: `GERTY_OPENCLAW_ENABLED`, `openclaw` on PATH, daemon process, port 18789, and `~/.openclaw` config. If `openclaw` is not found, ensure it's in PATH when the desktop launcher runs—e.g. install to `~/.local/bin` and add that to your PATH (or use `~/.npm-global/bin`). The launch script adds `~/.npm-global/bin` and `~/.local/bin` automatically. If the daemon is still not starting, run `openclaw daemon start` manually in a terminal before launching Gerty.
+
+**"gateway token mismatch" or "unauthorized"**
+
+The SDK uses `~/.openclaw/identity/device-auth.json` for auth. Ensure `gateway.auth.token` in `~/.openclaw/openclaw.json` matches `tokens.operator.token` in device-auth.json. If they differ, either update the gateway token to match device-auth, or re-run `openclaw onboard` / `openclaw pair` to regenerate a matching pair.
+
+**"missing scope: operator.write"**
+
+The device token has only `operator.read`. Re-pair the device to get write scope: run `openclaw pair` in a terminal, complete the pairing flow, then restart the daemon. The new device-auth will include `operator.write`.

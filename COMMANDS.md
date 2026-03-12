@@ -2,15 +2,15 @@
 
 A quick reference for tools and skills you can use with Gerty. Just type or say these phrases in chat, via voice, or in the Telegram bot.
 
-**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, action requests (calendar, email, files, browser) go to OpenClaw. Say what you want in natural language—no exact phrases needed.
+**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat.
 
 | Section | Tools |
 |---------|-------|
 | Time | Time, date, timezone, stopwatch |
 | Scheduling | Alarms, timers, pomodoro |
 | Utilities | Calculator, unit conversion, random, notes |
-| Info | Weather, web search, deep research (OpenRouter), interactive browsing (OpenRouter) |
-| Integrations | OpenClaw (files, browser, calendar, email when enabled) |
+| Info | Weather, web search, deep research (OpenClaw when enabled; else OpenRouter or DuckDuckGo), interactive browsing |
+| Integrations | OpenClaw (web search, research, browse, files, browser, calendar, email when enabled) |
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
@@ -147,7 +147,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 *Uses DuckDuckGo. Requires: `pip install duckduckgo-search`*
 
-*When using OpenRouter (Settings → Provider → OpenRouter), search uses quick web lookup (:online, fewer results) for faster responses. Queries that don't match explicit keywords may still route to web search via intent fallback (GERTY_WEB_INTENT_FALLBACK=1).*
+*When OpenClaw is enabled (`GERTY_OPENCLAW_ENABLED=1`), search goes to OpenClaw (agentic web_search + web_fetch). When OpenClaw is disabled or unreachable, OpenRouter uses quick web lookup (:online) or DuckDuckGo. Queries that don't match explicit keywords may still route to web search via intent fallback (GERTY_WEB_INTENT_FALLBACK=1) when OpenClaw is off.*
 
 ---
 
@@ -167,7 +167,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 ---
 
-## Deep Research (OpenRouter)
+## Deep Research
 
 | Command | Example |
 |---------|---------|
@@ -175,7 +175,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Find best / overview | "find me the best budget PCs for local LLM under £500" / "thoroughly research this business and provide a complete overview" |
 | Create spreadsheet | "find the best laptops and create a spreadsheet" / "analyze and report on electric cars under $40k" |
 
-*Requires OpenRouter (Settings → Provider → OpenRouter). Uses native web search (e.g. Grok 4.1 Fast :online) for multi-step research. Tables are saved to `data/research_*.csv`. Works for both typed chat and voice. When using local provider, Gerty will prompt you to switch to OpenRouter.*
+*When OpenClaw is enabled, research goes directly to OpenClaw (agentic web_search + web_fetch). When OpenClaw is disabled, requires OpenRouter (Settings → Provider → OpenRouter) for multi-step research; tables saved to `data/research_*.csv`. Works for both typed chat and voice.*
 
 ---
 
@@ -191,9 +191,12 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Tasks | "What's on my tasks?" / "Check my tasks" |
 | File ops | "Create a file with my meeting notes" / "Organize my downloads folder" |
 | Browser | "Open the site and fill out the form" / "Navigate to example.com" |
+| Web search / research / browse | "search for X" / "research Y" / "go to example.com" |
 | Automation | "Clear my inbox" / "Send a message to X" |
 
-*Gerty uses an LLM to understand your intent and reformulate the task for OpenClaw. Say what you want in natural language—no exact phrases needed.*
+*Option A: everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed.*
+
+*To verify the connection:* Say **"list my skills"** or **"list skills"**—this routes directly to OpenClaw and returns your installed skills. If you see the list, the daemon and auth are working.
 
 *Setup:* Install OpenClaw (`npm install -g openclaw`), run `openclaw daemon start` (or use the desktop launcher—it starts automatically), add `GERTY_OPENCLAW_ENABLED=1` to Gerty's `.env`. Configure OpenClaw: create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (not Gerty's), add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search, run `openclaw onboard` or `openclaw configure --section web`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
 

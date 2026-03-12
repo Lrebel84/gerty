@@ -157,12 +157,16 @@ VOICE_TTS_PARALLEL = os.getenv("VOICE_TTS_PARALLEL", "1").lower() in ("1", "true
 
 # OpenClaw - action execution (files, browser, calendar, email, etc.)
 GERTY_OPENCLAW_ENABLED = os.getenv("GERTY_OPENCLAW_ENABLED", "0").lower() in ("1", "true", "yes")
+# Route web search/research/browse to OpenClaw when enabled. Set 0 if OpenClaw has no web tools configured.
+GERTY_OPENCLAW_WEB_ENABLED = os.getenv("GERTY_OPENCLAW_WEB_ENABLED", "1").lower() in ("1", "true", "yes") if GERTY_OPENCLAW_ENABLED else False
 OPENCLAW_GATEWAY_WS_URL = os.getenv("OPENCLAW_GATEWAY_WS_URL", "ws://127.0.0.1:18789/gateway")
 OPENCLAW_AGENT_ID = os.getenv("OPENCLAW_AGENT_ID", "main")
 OPENCLAW_TIMEOUT = int(os.getenv("OPENCLAW_TIMEOUT", "120"))
-# Classifier model for routing (gerty vs openclaw). Fast model for low latency.
-OPENCLAW_CLASSIFIER_MODEL = os.getenv("OPENCLAW_CLASSIFIER_MODEL", "openai/gpt-4o-mini")
-OLLAMA_CLASSIFIER_MODEL = os.getenv("OLLAMA_CLASSIFIER_MODEL", "llama3.2")
+# Model for OpenClaw agent. Set in ~/.openclaw/openclaw.json agents.defaults.model.primary.
+# Document for users: run openclaw configure or edit openclaw.json to use this model.
+OPENCLAW_MODEL = os.getenv("OPENCLAW_MODEL", "openrouter/x-ai/grok-4.1-fast")
+# Max messages to include in history context when sending to OpenClaw (caps token usage).
+OPENCLAW_HISTORY_MAX_MESSAGES = int(os.getenv("OPENCLAW_HISTORY_MAX_MESSAGES", "20"))
 
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))

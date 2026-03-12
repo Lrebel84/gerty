@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from gerty.config import (
     CHAT_HISTORY_FILE,
+    GERTY_OPENCLAW_ENABLED,
     HTTP_TIMEOUT_OLLAMA,
     HTTP_TIMEOUT_OPENROUTER,
     KNOWLEDGE_DIR,
@@ -268,10 +269,13 @@ def create_app(router):
 
     @app.delete("/api/chat/history")
     async def delete_chat_history():
-        """Clear persisted chat history (new chat)."""
+        """Clear persisted chat history (new chat). Also clears OpenClaw session when enabled."""
         try:
             if CHAT_HISTORY_FILE.exists():
                 CHAT_HISTORY_FILE.unlink()
+            if GERTY_OPENCLAW_ENABLED:
+                from gerty.openclaw.client import clear_session
+                clear_session()
             return {"cleared": True}
         except OSError:
             return {"cleared": False}

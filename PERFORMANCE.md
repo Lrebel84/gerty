@@ -23,6 +23,10 @@ For lowest latency on CPU:
 - **OLLAMA_VOICE_MODEL**: Set to `llama3.2` (3B) for fast voice replies.
 - **Debug**: `GERTY_LOG_LEVEL=INFO` logs STT/LLM/TTS timing to `gerty.log`.
 
+## OpenClaw (Option A)
+
+When enabled, routing is keyword-only—no classifier LLM call. Fast-path intents (time, alarm, etc.) go to Gerty tools; everything else goes to OpenClaw. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat.
+
 ## Tips for faster responses
 
 - **Voice path**: No RAG, no summarization, minimal history – optimized for low latency.

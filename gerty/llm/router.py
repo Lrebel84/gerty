@@ -14,8 +14,8 @@ from gerty.config import (
     OLLAMA_REASONING_MODEL,
 )
 from gerty.llm.ollama_client import OllamaClient
-from gerty.llm.openclaw_classifier import classify as openclaw_classify
 from gerty.llm.openrouter_client import OpenRouterClient
+from gerty.openclaw.client import OPENCLAW_UNAVAILABLE_MSG
 from gerty.utils.math_extract import extract_math
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,8 @@ RESEARCH_KEYWORDS = [
     "find the best", "find me the best", "compare the top", "analyze and report",
     "gather information about", "complete overview", "thoroughly research",
 ]
+# Direct OpenClaw test: bypass classifier for connection verification
+OPENCLAW_DIRECT_KEYWORDS = ["list my skills", "list skills", "openclaw skills", "what can openclaw do"]
 # App integration queries: calendar, gmail, drive, tasks - route to OpenClaw classifier
 # Include "emails"/"email" so "check my latest three emails" routes correctly (not browse/search)
 APP_INTEGRATION_KEYWORDS = [
@@ -147,6 +149,10 @@ def classify_intent(text: str) -> str:
     for kw in RESEARCH_KEYWORDS:
         if kw in lower:
             return "research"
+    # Direct OpenClaw: "list my skills" etc — bypass classifier for connection test
+    for kw in OPENCLAW_DIRECT_KEYWORDS:
+        if kw in lower:
+            return "openclaw_direct"
     # App integration queries (calendar, gmail, drive, tasks) before browse
     for kw in APP_INTEGRATION_KEYWORDS:
         if kw in lower:
@@ -297,6 +303,7 @@ class Router:
         message: str,
         history: list[dict] | None = None,
         source: str = "chat",
+        custom_prompt: str | None = None,
     ) -> str:
         """
         Route message to appropriate handler.
@@ -304,21 +311,19 @@ class Router:
         """
         intent = classify_intent(message)
 
-        # Fast path: instant Gerty tools—skip classifier and web fallback
+        # Fast path: instant Gerty tools
         if intent in FAST_PATH_INTENTS and self._tool_executor:
             return self._tool_executor(intent, message)
 
-        # OpenClaw: classifier runs FIRST for non-fast-path (per OPENCLAW_INTEGRATION.md)
-        # Gerty = chat/Q&A/search; OpenClaw = actions. Classifier-routed gerty goes straight to chat.
-        if GERTY_OPENCLAW_ENABLED:
-            result = openclaw_classify(message, self.ollama, self.openrouter)
-            if result["route"] == "openclaw":
-                from gerty.openclaw.client import execute as openclaw_execute
-                task = result.get("reformulated_task", "").strip() or message
-                return openclaw_execute(task)
-            # Classifier said gerty: skip web fallback, go to chat (avoids extra LLM call + misrouting)
+        # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
+        if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
+            from gerty.openclaw.client import execute as openclaw_execute
+            response = openclaw_execute(message, history=history, system_context=custom_prompt)
+            if response != OPENCLAW_UNAVAILABLE_MSG:
+                return response
+            # Fallback: OpenClaw down — continue to Gerty chat
 
-        # Web fallback: only when OpenClaw disabled (classifier not run). Adds ~5-15s; can misroute chat to research.
+        # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
         if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
             if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
                 fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
@@ -377,26 +382,23 @@ class Router:
         """Route message and stream response chunks. Tools return full text at once."""
         intent = classify_intent(message)
 
-        # Fast path: instant Gerty tools—skip classifier and web fallback
+        # Fast path: instant Gerty tools
         if intent in FAST_PATH_INTENTS and self._tool_executor:
             result = self._tool_executor(intent, message)
             yield result
             return
 
-        # OpenClaw: classifier runs FIRST for non-fast-path (per OPENCLAW_INTEGRATION.md)
-        # Gerty = chat/Q&A/search; OpenClaw = actions. Classifier-routed gerty goes straight to chat.
-        if GERTY_OPENCLAW_ENABLED:
-            result = openclaw_classify(message, self.ollama, self.openrouter)
-            if result["route"] == "openclaw":
-                from gerty.openclaw.client import execute as openclaw_execute
+        # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
+        if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
+            from gerty.openclaw.client import execute as openclaw_execute
+            response = openclaw_execute(message, history=history, system_context=custom_prompt)
+            if response != OPENCLAW_UNAVAILABLE_MSG:
                 yield "Working on it..."
-                task = result.get("reformulated_task", "").strip() or message
-                response = openclaw_execute(task)
                 yield response
                 return
-            # Classifier said gerty: skip web fallback, go to chat (avoids extra LLM call + misrouting)
+            # Fallback: OpenClaw down — continue to Gerty chat
 
-        # Web fallback: only when OpenClaw disabled (classifier not run). Adds ~5-15s; can misroute chat to research.
+        # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
         if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
             if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
                 fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)

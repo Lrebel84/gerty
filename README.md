@@ -13,7 +13,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**, **OpenClaw** (action execution: files, browser, calendar, email when enabled)
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search`. Routes by intent: "search for X", "get me contact details for Y", "when is showtimes of Z", etc. OpenRouter uses quick search for simple lookups.
-- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. When OpenClaw is enabled, the classifier runs first—simple chat (e.g. "tell me about X") goes straight to chat, not research. See COMMANDS.md.
+- **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. When OpenClaw is enabled, everything except fast-path (time, alarm, etc.) goes to OpenClaw; when the daemon is down, Gerty falls back to Ollama/OpenRouter chat. See COMMANDS.md.
 - **Interactive browsing** (OpenRouter, opt-in): Navigate, click, fill forms. Requires Python 3.11+, `GERTY_BROWSE_ENABLED=1`, and `pip install browser-use playwright` + `python -m playwright install chromium`. See COMMANDS.md.
 
 ## Setup
@@ -128,7 +128,7 @@ This installs a `.desktop` file so you can:
 
 ### 7. OpenClaw (optional – action execution)
 
-When enabled, Gerty routes action requests (files, browser, calendar, email) to OpenClaw. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
+When enabled, Gerty uses **Option A** routing: everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
 
 ```bash
 # Install OpenClaw (Node.js 22+)
@@ -138,7 +138,7 @@ npm install -g openclaw@latest
 GERTY_OPENCLAW_ENABLED=1
 ```
 
-**OpenClaw config:** OpenClaw uses its own config and keys in `~/.openclaw/`. Create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (separate from Gerty). Add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search. Run `openclaw onboard` or `openclaw configure --section web` to set up.
+**OpenClaw config:** OpenClaw uses its own config and keys in `~/.openclaw/`. Create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (separate from Gerty). Add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search. Run `openclaw onboard` or `openclaw configure --section web` to set up. To use Grok 4.1 fast, set `agents.defaults.model.primary` to `openrouter/x-ai/grok-4.1-fast` in `~/.openclaw/openclaw.json`.
 
 When using the desktop launcher, the daemon starts automatically. Otherwise run `openclaw daemon start` before using Gerty.
 

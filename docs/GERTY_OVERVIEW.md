@@ -41,17 +41,17 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
                                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  Router (gerty/llm/router.py)                                               │
-│  classify_intent() → Fast path (instant) or LLM classifier (when OpenClaw)  │
+│  classify_intent() → Fast path | OpenClaw (Option A) | Gerty tools / Chat   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                         │
           ┌─────────────────────────────┼─────────────────────────────┐
           ▼                             ▼                             ▼
 ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
 │  Fast path       │         │  OpenClaw        │         │  Gerty tools /   │
-│  time, alarm,    │         │  (when enabled)  │         │  Search,         │
-│  timer, calc,    │         │  LLM classifier  │         │  Research,       │
-│  notes, weather, │         │  → action exec   │         │  Browse, Chat    │
-│  rag             │         │                  │         │                  │
+│  time, alarm,    │         │  (when enabled)  │         │  Chat            │
+│  timer, calc,    │         │  Everything else │         │  (fallback when  │
+│  notes, weather, │         │  except fast path│         │  OpenClaw down)  │
+│  rag             │         │  Fallback: chat  │         │                  │
 └────────┬─────────┘         └────────┬─────────┘         └────────┬─────────┘
          │                            │                            │
          ▼                            ▼                            ▼
@@ -60,7 +60,7 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 │  (instant)       │         │  agent.execute  │         │  LLM             │
 └──────────────────┘         └──────────────────┘         └──────────────────┘
          │                            │                            │
-         │                   (or plain chat/complex                │
+         │                   (fallback when OpenClaw down          │
          │                    → Ollama / OpenRouter)               │
          │                            │                            │
          └────────────────────────────┼────────────────────────────┘
@@ -75,7 +75,7 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **main.py** | `gerty/main.py` | Entry point: builds ToolExecutor, Router, FastAPI app; starts server, Telegram bot, alarm loop; opens PyWebView window |
-| **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; OpenClaw classifier when enabled |
+| **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; Option A: OpenClaw for non-fast-path when enabled |
 | **Pipeline** | `gerty/pipeline.py` | Chat pipeline: prompt, history summarization, voice tweaks; calls `router.route_stream()` |
 | **ToolExecutor** | `gerty/tools/base.py` | Registers tools by intent; `execute(intent, message)` dispatches to matching tool |
 | **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, etc. |
@@ -132,7 +132,7 @@ The router uses **keyword-based** intent classification. Order matters: specific
 | sys_monitor | "cpu usage", "memory usage" |
 | chat / complex | Fallback; may trigger web intent fallback |
 
-**OpenClaw (when enabled):** Non-fast-path messages go through an LLM classifier that routes to Gerty or OpenClaw. Calendar, Gmail, Drive, Tasks go to OpenClaw. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md).
+**OpenClaw (when enabled):** Option A—everything except fast-path goes to OpenClaw. Gerty passes full chat history and custom prompt. When the daemon is unreachable, Gerty falls back to Ollama/OpenRouter chat. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md).
 
 ---
 

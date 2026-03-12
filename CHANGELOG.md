@@ -11,6 +11,75 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.35] - 2026-03-12
+
+### OpenClaw – Option A Routing, History, and Persona
+
+OpenClaw routing simplified to **Option A**: everything except fast-path goes to OpenClaw. No classifier—follow-ups stay in context.
+
+#### Routing (Option A)
+
+- **Fast path:** Time, date, alarm, timer, calculator, units, notes, stopwatch, timezone, weather, random, RAG → Gerty tools (instant).
+- **OpenClaw:** Everything else → OpenClaw when enabled. Gerty passes full chat history and custom prompt.
+- **Fallback:** When the daemon is unreachable, Gerty falls back to Ollama or OpenRouter chat.
+
+#### OpenClaw Client
+
+- **History:** `execute()` now accepts `history` and `system_context`. Gerty prepends formatted conversation and persona to each message.
+- **Custom prompt:** Settings custom prompt (e.g. "You are Gerty, the helpful assistant to Liam") is passed as system context.
+- **clear_session():** New chat clears both local history and the OpenClaw session.
+
+#### Config
+
+- **OPENCLAW_MODEL:** Documented default `openrouter/x-ai/grok-4.1-fast`; set in `~/.openclaw/openclaw.json`.
+- **OPENCLAW_HISTORY_MAX_MESSAGES:** Max messages in history context (default 20).
+- **Removed:** OPENCLAW_CLASSIFIER_MODEL, OLLAMA_CLASSIFIER_MODEL, and classifier module.
+
+#### Removed
+
+- **openclaw_classifier.py** – No longer used; routing is keyword-based only.
+
+#### Docs
+
+- `docs/OPENCLAW_INTEGRATION.md` – Rewritten for Option A; Grok 4.1 fast setup; custom prompt and history.
+- `docs/GERTY_OVERVIEW.md` – Updated routing diagram.
+- `COMMANDS.md` – Updated OpenClaw behavior.
+- `.env.example` – Updated OpenClaw vars.
+
+---
+
+## [0.8.34] - 2026-03-12
+
+### OpenClaw – Connection and Desktop Launch Fixes
+
+OpenClaw integration now works reliably when launching Gerty from the desktop. Several fixes address daemon startup, auth, and failure handling.
+
+#### Daemon Auto-Start
+
+- **Node.js 22+:** Launch script puts `/usr/local/bin` first in PATH so OpenClaw uses Node 22 (required) instead of system Node 20. Fixes silent daemon failure when `/usr/bin/node` is v20.
+- **Port check:** Replaced `pgrep "openclaw"` (which matched Cursor/IDE processes) with a Python socket check on port 18789. Daemon starts only when port is not listening.
+- **Wait for ready:** Script waits up to 20 seconds for port 18789 before launching Gerty.
+- **Fresh code:** Added `python -B` to avoid stale bytecode; ensures latest client code runs.
+
+#### Client and Auth
+
+- **Async fix:** Added `await` before `OpenClawClient.connect()` (SDK returns a coroutine, not a context manager).
+- **Token sync:** `device-auth.json` and `gateway.auth.token` must match. Docs describe syncing when they diverge.
+- **operator.write scope:** Device token needs `operator.write` for execution; synced from `paired.json` when device was re-paired.
+- **Fast fail:** Port check before connect—returns "action system isn't running" in ~2 seconds when daemon is down instead of 60+ seconds.
+- **15s timeout:** `asyncio.wait_for` caps execute at 15 seconds; avoids long hangs.
+
+#### Routing
+
+- **Direct test path:** "list my skills", "list skills", "openclaw skills" route directly to OpenClaw (no classifier) for connection verification.
+
+#### Docs
+
+- `docs/OPENCLAW_INTEGRATION.md` – Node 22 requirement, token/scope troubleshooting
+- `scripts/check_openclaw.sh` – Optional connection test step
+
+---
+
 ## [0.8.33] - 2026-03-12
 
 ### MCP Removed – OpenClaw Handles App Integrations
