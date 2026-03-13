@@ -11,6 +11,21 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.41] - 2026-03-13
+
+### Proactive Agent – Working Setup
+
+#### Proactive-agent (ClawHub) configured and tested
+
+- **System cron** runs `scripts/proactive-heartbeat.sh` every 4 hours. OpenClaw's built-in cron with `--session isolated` has known issues (tools don't execute); system cron calling `openclaw agent` works reliably.
+- **USER.md, SOUL.md** populated from onboarding answers. Added "What Proactive Searches Should Focus On" in USER.md so the agent targets relevant items (AI-run businesses, UK tech events, OpenClaw, Gerty).
+- **HEARTBEAT.md** log path fixed: `/tmp/clawdbot/*.log` → `~/gerty/gerty.log` and `~/gerty/logs/proactive.log`.
+- **ONBOARDING.md** completion log updated (12/12 questions).
+- **Findings** appended to `notes/areas/proactive-updates.md`; output logged to `logs/proactive.log`.
+- **Docs:** OPENCLAW_INTEGRATION.md §8 documents system cron approach. setup-proactive-cron.sh adds the crontab entry.
+
+---
+
 ## [0.8.40] - 2026-03-13
 
 ### Telegram – Mobile Control Working

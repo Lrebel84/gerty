@@ -146,7 +146,7 @@ Key environment variables (see `.env.example`):
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Cloud LLM |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS` | Telegram bot |
 | `PICOVOICE_ACCESS_KEY` | Wake word |
-| `GERTY_OPENCLAW_ENABLED` | OpenClaw integration (files, browser, calendar, email, exec on host, ClawHub skills). OpenClaw uses `~/.openclaw/.env` for its own keys. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) for self-improvement setup. |
+| `GERTY_OPENCLAW_ENABLED` | OpenClaw integration (files, browser, calendar, email, exec on host, ClawHub skills). OpenClaw uses `~/.openclaw/.env` for its own keys. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) for self-improvement setup. Proactive-agent (ClawHub) runs via system cron; see §8. |
 | `GERTY_BROWSE_ENABLED` | Interactive browsing |
 | `GERTY_SYSTEM_TOOLS` | System commands, app launch |
 

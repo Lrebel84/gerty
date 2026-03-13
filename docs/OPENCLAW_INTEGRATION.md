@@ -208,6 +208,23 @@ In Gerty Settings, add a prompt that tells OpenClaw it can improve Gerty:
 
 For skill installs and multi-step edits, increase `OPENCLAW_TIMEOUT` in Gerty's `.env` (e.g. 120 seconds).
 
+### 8. Proactive-agent (ClawHub) and cron
+
+The **proactive-agent** skill (`clawhub install proactive-agent`) makes the agent browse the web, check calendar/emails, and log findings.
+
+**Use system cron** — OpenClaw's built-in cron with `--session isolated` has known issues: isolated sessions often don't execute tools (web_search, write) properly. The reliable approach is system cron running `openclaw agent`:
+
+```bash
+# Crontab (runs every 4 hours)
+0 */4 * * * /home/liam/gerty/scripts/proactive-heartbeat.sh
+```
+
+The script (`scripts/proactive-heartbeat.sh`) sets PATH for Node 22 and runs `openclaw agent --to <telegram-id>` with an explicit message. Output goes to `logs/proactive.log`; findings are appended to `notes/areas/proactive-updates.md`.
+
+**Prerequisites:** USER.md and SOUL.md populated (from onboarding). HEARTBEAT.md in workspace root. Gateway running when cron fires (Gerty or `openclaw daemon start`).
+
+**Test:** Run `./scripts/proactive-heartbeat.sh` manually. Check `tail logs/proactive.log` and `notes/areas/proactive-updates.md`.
+
 ### Verification
 
 | Step | Check |

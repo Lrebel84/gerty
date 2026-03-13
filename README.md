@@ -159,6 +159,19 @@ GERTY_OPENCLAW_ENABLED=1
 
 When using the desktop launcher, the daemon starts automatically. Otherwise run `openclaw daemon start` before using Gerty. If gateway shows unreachable despite systemd "running", try `systemctl --user restart openclaw-gateway`.
 
+### 9. Proactive agent (optional – background checks)
+
+The **proactive-agent** skill (ClawHub) runs periodic heartbeats: web search, calendar/email checks, and logs findings. Uses system cron (OpenClaw's built-in cron has issues with isolated sessions + tools).
+
+```bash
+# Add crontab (every 4 hours)
+./scripts/setup-proactive-cron.sh
+# Or manually: crontab -e, add:
+# 0 */4 * * * /home/you/gerty/scripts/proactive-heartbeat.sh
+```
+
+**Prerequisites:** Complete onboarding (USER.md, SOUL.md). Gateway running when cron fires. Test: `./scripts/proactive-heartbeat.sh`. Findings: `notes/areas/proactive-updates.md`; log: `tail logs/proactive.log`.
+
 ## Usage
 
 ```bash

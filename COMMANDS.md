@@ -203,6 +203,19 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 ---
 
+## Proactive agent (background heartbeats)
+
+When the **proactive-agent** skill is installed and configured, a system cron runs every 4 hours. The agent:
+
+- Runs the HEARTBEAT.md checklist
+- Uses web search for items relevant to your goals (from USER.md)
+- Appends findings to `notes/areas/proactive-updates.md`
+- Logs output to `logs/proactive.log`
+
+*Setup:* Complete onboarding (USER.md, SOUL.md). Run `./scripts/setup-proactive-cron.sh` to add the crontab. Test: `./scripts/proactive-heartbeat.sh`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) §8.
+
+---
+
 ## Pomodoro
 
 | Action | Example |
