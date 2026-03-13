@@ -11,6 +11,29 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [0.8.40] - 2026-03-13
+
+### Telegram – Mobile Control Working
+
+#### Fix: Main-thread signal handler error
+
+- **Problem:** Telegram bot crashed with `RuntimeError: set_wakeup_fd only works in main thread of the main interpreter`. The bot ran in a background thread; `run_polling()` adds signal handlers that require the main thread.
+- **Fix:** Replaced `run_polling()` with manual `initialize()` → `start()` → `updater.start_polling()` so the bot runs without signal handlers. Router callback runs via `run_in_executor()` to avoid blocking the async loop.
+- **Result:** Telegram bot now works when Gerty is launched from desktop or terminal.
+
+#### Architecture
+
+- **Single entry point:** All Telegram messages go through Gerty. No separate OpenClaw Telegram channel. Gerty routes to fast-path tools or OpenClaw (when enabled); replies flow back through Gerty.
+- **Notifications:** Alarms, timers, and pomodoro phases are sent to Telegram via `notify(..., channels=["telegram"])`.
+
+#### Docs
+
+- **docs/TELEGRAM_SETUP.md** – Full setup: BotFather, chat ID, `.env` config, testing.
+- **README.md** – Telegram setup section with quick steps.
+- **OPENCLAW_INTEGRATION.md** – Note that Telegram control goes through Gerty.
+
+---
+
 ## [0.8.39] - 2026-03-12
 
 ### OpenClaw – Full Exec Access, DCG Guard, Self-Improving Agent

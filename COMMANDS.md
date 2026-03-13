@@ -2,7 +2,7 @@
 
 A quick reference for tools and skills you can use with Gerty. Just type or say these phrases in chat, via voice, or in the Telegram bot.
 
-**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat.
+**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat. **Note:** OpenClaw/Grok sometimes returns invented responses instead of using tools; verify critical actions. See [docs/OPENCLAW_DIAGNOSIS.md](docs/OPENCLAW_DIAGNOSIS.md).
 
 | Section | Tools |
 |---------|-------|
@@ -193,12 +193,13 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Browser | "Open the site and fill out the form" / "Navigate to example.com" |
 | Web search / research / browse | "search for X" / "research Y" / "go to example.com" |
 | Automation | "Clear my inbox" / "Send a message to X" |
+| Self-improvement | "Install the summarize skill from ClawHub" / "Run ls -la in my home directory" / "Open Firefox" / "Add a new skill to Gerty that does X" |
 
 *Option A: everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed.*
 
 *To verify the connection:* Say **"list my skills"** or **"list skills"**—this routes directly to OpenClaw and returns your installed skills. If you see the list, the daemon and auth are working.
 
-*Setup:* Install OpenClaw (`npm install -g openclaw`), run `openclaw daemon start` (or use the desktop launcher—it starts automatically), add `GERTY_OPENCLAW_ENABLED=1` to Gerty's `.env`. Configure OpenClaw: create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (not Gerty's), add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search, run `openclaw onboard` or `openclaw configure --section web`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
+*Setup:* Install OpenClaw (`npm install -g openclaw`), run `openclaw daemon start` (or use the desktop launcher—it starts automatically), add `GERTY_OPENCLAW_ENABLED=1` to Gerty's `.env`. Configure OpenClaw: create `~/.openclaw/.env` with a dedicated `OPENROUTER_API_KEY` (not Gerty's), add `BRAVE_API_KEY` or `PERPLEXITY_API_KEY` for web search, run `openclaw onboard` or `openclaw configure --section web`. For self-improvement (run commands, install skills from ClawHub, control apps): see [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) Self-improvement setup.
 
 ---
 
@@ -297,7 +298,7 @@ Everything else is handled by the LLM. Ask questions, get explanations, write co
 
 ## Telegram Commands
 
-When using Gerty via Telegram:
+Control Gerty from your phone. Setup: [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md). When using Gerty via Telegram:
 
 | Command | Description |
 |---------|-------------|

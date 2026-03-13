@@ -10,6 +10,8 @@ Gerty can route action requests to [OpenClaw](https://github.com/openclaw/opencl
 
 OpenClaw handles web search, research, browse, calendar, Gmail, Drive, Tasks, files, browser, and more. No classifier—simple routing.
 
+**Telegram:** All Telegram messages go through Gerty. When you message the bot, Gerty routes to OpenClaw (when enabled) for non-fast-path requests. No separate OpenClaw Telegram channel. See [docs/TELEGRAM_SETUP.md](TELEGRAM_SETUP.md).
+
 ## Setup
 
 ### 1. Install OpenClaw

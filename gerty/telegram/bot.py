@@ -9,6 +9,11 @@ from gerty.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
 logger = logging.getLogger(__name__)
 
 
+def _run_callback_sync(callback: Callable[[str], str], text: str) -> str:
+    """Run blocking router callback in executor-friendly form."""
+    return callback(text)
+
+
 def create_bot(router_callback: Callable[[str], str]):
     """Create and run Telegram bot. Blocks until stopped."""
 
@@ -32,6 +37,11 @@ def create_bot(router_callback: Callable[[str], str]):
     def is_authorized(chat_id: int) -> bool:
         return chat_id in TELEGRAM_CHAT_IDS
 
+    async def _route(text: str) -> str:
+        """Run router callback without blocking the event loop."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _run_callback_sync, router_callback, text)
+
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not is_authorized(update.effective_chat.id):
             await update.message.reply_text("Unauthorized.")
@@ -52,7 +62,7 @@ def create_bot(router_callback: Callable[[str], str]):
             await update.message.reply_text("Usage: /chat <message>")
             return
         try:
-            reply = router_callback(text)
+            reply = await _route(text)
             await update.message.reply_text(reply)
         except Exception as e:
             logger.exception("Chat command error")
@@ -61,14 +71,16 @@ def create_bot(router_callback: Callable[[str], str]):
     async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.message or not update.message.text:
             return
-        if not is_authorized(update.effective_chat.id):
+        chat_id = update.effective_chat.id
+        logger.info("Telegram message from chat_id=%s: %s", chat_id, update.message.text[:50])
+        if not is_authorized(chat_id):
             await update.message.reply_text("Unauthorized.")
             return
         text = update.message.text.strip()
         if text.startswith("/"):
             return  # Commands handled by CommandHandlers
         try:
-            reply = router_callback(text)
+            reply = await _route(text)
             await update.message.reply_text(reply)
         except Exception as e:
             logger.exception("Message handler error")
@@ -78,7 +90,7 @@ def create_bot(router_callback: Callable[[str], str]):
         if not is_authorized(update.effective_chat.id):
             return
         try:
-            reply = router_callback("what time is it")
+            reply = await _route("what time is it")
             await update.message.reply_text(reply)
         except Exception:
             logger.exception("Time command error")
@@ -91,9 +103,9 @@ def create_bot(router_callback: Callable[[str], str]):
         msg = text.replace("/alarm", "").strip() or "list"
         try:
             if msg == "list":
-                reply = router_callback("list my alarms")
+                reply = await _route("list my alarms")
             else:
-                reply = router_callback(f"set alarm for {msg}")
+                reply = await _route(f"set alarm for {msg}")
             await update.message.reply_text(reply)
         except Exception:
             logger.exception("Alarm command error")
@@ -106,15 +118,16 @@ def create_bot(router_callback: Callable[[str], str]):
         msg = text.replace("/timer", "").strip() or "list"
         try:
             if msg == "list":
-                reply = router_callback("list timers")
+                reply = await _route("list timers")
             else:
-                reply = router_callback(f"timer {msg}")
+                reply = await _route(f"timer {msg}")
             await update.message.reply_text(reply)
         except Exception:
             logger.exception("Timer command error")
             await update.message.reply_text("Something went wrong. Please try again.")
 
-    def run():
+    async def _run_async():
+        """Run bot using manual polling (avoids signal handlers that require main thread)."""
         app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CommandHandler("chat", handle_chat_cmd))
@@ -122,6 +135,25 @@ def create_bot(router_callback: Callable[[str], str]):
         app.add_handler(CommandHandler("alarm", cmd_alarm))
         app.add_handler(CommandHandler("timer", cmd_timer))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        # Keep running until shutdown
+        stop_event = asyncio.Event()
+        try:
+            await stop_event.wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
+
+    def run():
+        logger.warning("Telegram bot starting (chat_ids=%s)", TELEGRAM_CHAT_IDS)
+        try:
+            asyncio.run(_run_async())
+        except Exception as e:
+            logger.exception("Telegram bot failed: %s", e)
 
     run()

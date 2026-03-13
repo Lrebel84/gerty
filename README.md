@@ -126,7 +126,20 @@ This installs a `.desktop` file so you can:
 - **Close cleanly** – Clicking the window X button fully exits the app (no lingering process)
 - **OpenClaw auto-start** – When `GERTY_OPENCLAW_ENABLED=1`, the OpenClaw daemon starts automatically in the background when you launch Gerty from the app launcher
 
-### 7. OpenClaw (optional – action execution)
+### 7. Telegram (optional – mobile control)
+
+Control Gerty from your phone. All messages go through Gerty (fast-path tools + OpenClaw when enabled). See [docs/TELEGRAM_SETUP.md](docs/TELEGRAM_SETUP.md) for full instructions.
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) (`/newbot`), copy the token
+2. Get your chat ID (e.g. message [@userinfobot](https://t.me/userinfobot))
+3. Add to `.env`:
+   ```
+   TELEGRAM_BOT_TOKEN=your_token_here
+   TELEGRAM_CHAT_IDS=your_chat_id
+   ```
+4. Restart Gerty, then message your bot (e.g. "what time is it", "list my skills")
+
+### 8. OpenClaw (optional – action execution)
 
 When enabled, Gerty uses **Option A** routing: everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md).
 
