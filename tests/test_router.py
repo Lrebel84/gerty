@@ -187,11 +187,15 @@ class TestRouterOpenClawOptionA:
             call_args = mock_execute.call_args
             assert call_args[0][0] == "search for Python tutorial"
             assert call_args[1].get("history") is None
-            assert call_args[1].get("system_context") is None
+            # system_context includes OPENCLAW_TOOL_INSTRUCTIONS (appended when custom_prompt is None)
+            from gerty.llm.router import OPENCLAW_TOOL_INSTRUCTIONS
+            assert call_args[1].get("system_context") == OPENCLAW_TOOL_INSTRUCTIONS
 
     @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
     def test_openclaw_receives_history_and_system_context(self):
-        """OpenClaw execute receives history and custom_prompt when provided."""
+        """OpenClaw execute receives history and custom_prompt with tool instructions."""
+        from gerty.llm.router import OPENCLAW_TOOL_INSTRUCTIONS
+
         with patch("gerty.openclaw.client.execute") as mock_execute:
             mock_execute.return_value = "Chat response"
             router = Router(tool_executor=MagicMock())
@@ -201,7 +205,7 @@ class TestRouterOpenClawOptionA:
             mock_execute.assert_called_once_with(
                 "we're testing",
                 history=history,
-                system_context="You are Gerty.",
+                system_context="You are Gerty." + OPENCLAW_TOOL_INSTRUCTIONS,
             )
 
     @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)

@@ -20,3 +20,9 @@ research_*.csv
 .cursor/
 models/wakeword/
 *=*
+
+# Google OAuth and credentials (secrets)
+**/google_client.json
+**/google-credentials.json
+**/*-token.json
+**/credentials/

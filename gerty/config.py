@@ -165,8 +165,6 @@ OPENCLAW_TIMEOUT = int(os.getenv("OPENCLAW_TIMEOUT", "120"))
 # Model for OpenClaw agent. Set in ~/.openclaw/openclaw.json agents.defaults.model.primary.
 # Document for users: run openclaw configure or edit openclaw.json to use this model.
 OPENCLAW_MODEL = os.getenv("OPENCLAW_MODEL", "openrouter/x-ai/grok-4.1-fast")
-# Max messages to include in history context when sending to OpenClaw (caps token usage).
-OPENCLAW_HISTORY_MAX_MESSAGES = int(os.getenv("OPENCLAW_HISTORY_MAX_MESSAGES", "20"))
 
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))

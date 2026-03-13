@@ -39,6 +39,7 @@ from gerty.tools import (
     AppLaunchTool,
     BrowseTool,
     CalculatorTool,
+    CalendarTool,
     MediaControlTool,
     NotesTool,
     PomodoroTool,
@@ -133,6 +134,7 @@ def main():
     executor.register(StopwatchTool())
     executor.register(TimezoneTool())
     executor.register(WeatherTool())
+    executor.register(CalendarTool(), ["calendar"])
     executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
     if GERTY_BROWSE_ENABLED:

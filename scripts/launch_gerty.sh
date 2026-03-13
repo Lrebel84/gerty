@@ -6,9 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Ensure OpenClaw is on PATH (user-level install; desktop launcher has minimal env)
-# /usr/local/bin first: OpenClaw requires Node 22+; /usr/bin often has Node 20
-export PATH="/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/bin:/bin:$PATH"
+# Desktop launcher has minimal env: often PATH=/usr/bin:/bin (Node 20), no DBUS.
+# OpenClaw needs Node 22+ and may need session vars for systemctl checks.
+OPENCLAW_PATH="/usr/local/bin:$HOME/.npm-global/bin:$HOME/.local/bin:/usr/bin:/bin"
+export PATH="$OPENCLAW_PATH:$PATH"
+
+# Inherit session vars if missing (desktop apps usually have these; background processes might not)
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 # Check if OpenClaw integration is enabled
 OPENCLAW_ENABLED=0
@@ -18,7 +23,7 @@ if [ -f .env ]; then
 fi
 
 # When enabled: ensure OpenClaw daemon is running before launching Gerty.
-# Use Python for port check (reliable; ss/nc may not be in desktop PATH).
+# Use env to force Node 22+ (desktop launcher often has Node 20 first in PATH).
 if [ "$OPENCLAW_ENABLED" = "1" ] && command -v openclaw &>/dev/null; then
     port_ready() {
         "$PROJECT_ROOT/.venv/bin/python" -c "
@@ -34,7 +39,8 @@ except Exception:
 " 2>/dev/null
     }
     if ! port_ready; then
-        openclaw daemon start >> "$PROJECT_ROOT/gerty.log" 2>&1 &
+        env PATH="$OPENCLAW_PATH" DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+            openclaw daemon start >> "$PROJECT_ROOT/gerty.log" 2>&1 &
         for i in $(seq 1 20); do
             sleep 1
             port_ready && break

@@ -2,13 +2,14 @@
 
 import asyncio
 import logging
+import queue
 import socket
-from typing import Optional
+import threading
+from typing import AsyncIterator, Iterator, Optional
 
 from gerty.config import (
     OPENCLAW_AGENT_ID,
     OPENCLAW_GATEWAY_WS_URL,
-    OPENCLAW_HISTORY_MAX_MESSAGES,
     OPENCLAW_TIMEOUT,
 )
 
@@ -20,19 +21,28 @@ OPENCLAW_UNAVAILABLE_MSG = (
     "Try starting OpenClaw with: openclaw daemon start"
 )
 
+# Tool names -> brief feedback for streaming
+_TOOL_FEEDBACK = {
+    "web_search": "Searching...",
+    "web_fetch": "Fetching...",
+    "exec": "Running...",
+    "files": "Working with files...",
+    "process": "Running...",
+}
+
 def _format_message(
     message: str,
     history: list[dict] | None = None,
     system_context: str | None = None,
 ) -> str:
-    """Build the payload: system context + history + current message."""
+    """Build payload: system + full history + current message."""
     parts = []
-    if system_context and system_context.strip():
-        parts.append(f"[System: {system_context.strip()}]\n\n")
+    context = (system_context or "").strip()
+    if context:
+        parts.append(f"[System: {context}]\n\n")
     if history:
-        keep = history[-OPENCLAW_HISTORY_MAX_MESSAGES:]
         lines = []
-        for m in keep:
+        for m in history:
             role = m.get("role", "user")
             content = m.get("content", "")
             if content:
@@ -80,7 +90,7 @@ def execute(
 async def _execute_async(message: str) -> str:
     try:
         from openclaw_sdk import OpenClawClient
-        from openclaw_sdk.core.config import ClientConfig
+        from openclaw_sdk.core.config import ClientConfig, ExecutionOptions
     except ImportError:
         logger.warning("openclaw-sdk not installed. Run: pip install openclaw-sdk")
         return (
@@ -94,14 +104,133 @@ async def _execute_async(message: str) -> str:
     )
     try:
         async with await OpenClawClient.connect(**config.model_dump()) as client:
-            agent = client.get_agent(OPENCLAW_AGENT_ID)
-            result = await agent.execute(message)
+            agent = client.get_agent(OPENCLAW_AGENT_ID, session_name="gerty")
+            # Explicit deliver=False: SDK-only (no Discord/Telegram); avoids channel resolution.
+            options = ExecutionOptions(deliver=False)
+            result = await agent.execute(message, options=options)
             if result.success:
                 return result.content or "Done."
-            return result.content or "OpenClaw completed but returned no output."
+            logger.warning("OpenClaw returned success=%s, content=%r", result.success, (result.content or "")[:200])
+            return result.content or "OpenClaw ran but returned no output. Run: openclaw status && openclaw gateway logs --follow"
     except Exception as e:
         logger.warning("OpenClaw execute failed: %s", e)
         return OPENCLAW_UNAVAILABLE_MSG
+
+
+async def _execute_stream_async(
+    message: str,
+    history: list[dict] | None = None,
+    system_context: str | None = None,
+) -> AsyncIterator[str]:
+    """Async generator: yield content chunks and tool feedback from OpenClaw stream."""
+    try:
+        from openclaw_sdk import OpenClawClient
+        from openclaw_sdk.core.config import ClientConfig, ExecutionOptions
+        from openclaw_sdk.core.types import ContentEvent, DoneEvent, ErrorEvent, ToolCallEvent
+    except ImportError:
+        logger.warning("openclaw-sdk not installed. Run: pip install openclaw-sdk")
+        yield (
+            "OpenClaw isn't set up yet. Install it with: pip install openclaw-sdk, "
+            "then start the daemon: openclaw daemon start"
+        )
+        return
+
+    config = ClientConfig(
+        gateway_ws_url=OPENCLAW_GATEWAY_WS_URL,
+        timeout=OPENCLAW_TIMEOUT,
+    )
+    try:
+        async with await OpenClawClient.connect(**config.model_dump()) as client:
+            agent = client.get_agent(OPENCLAW_AGENT_ID, session_name="gerty")
+            payload = _format_message(message, history=history, system_context=system_context)
+            seen_tool_feedback = set()
+
+            try:
+                options = ExecutionOptions(deliver=False)
+                async for event in agent.execute_stream_typed(payload, options=options):
+                    if isinstance(event, ContentEvent) and event.text:
+                        yield event.text
+                    elif isinstance(event, ToolCallEvent) and event.tool:
+                        # Yield brief feedback once per tool (avoid spam)
+                        feedback = _TOOL_FEEDBACK.get(
+                            event.tool, f"Using {event.tool}..."
+                        )
+                        if event.tool not in seen_tool_feedback:
+                            seen_tool_feedback.add(event.tool)
+                            yield feedback
+                    elif isinstance(event, ErrorEvent):
+                        yield event.message or "OpenClaw encountered an error."
+                        return
+                    elif isinstance(event, DoneEvent):
+                        break
+            except NotImplementedError:
+                # Gateway doesn't support streaming; fall back to execute
+                logger.debug("OpenClaw streaming not supported, using execute")
+                options = ExecutionOptions(deliver=False)
+                result = await agent.execute(payload, options=options)
+                if result.success and result.content:
+                    yield result.content
+                else:
+                    yield result.content or "OpenClaw ran but returned no output."
+    except asyncio.TimeoutError:
+        logger.warning("OpenClaw stream timed out after %ds", _get_execute_timeout())
+        yield OPENCLAW_UNAVAILABLE_MSG
+    except Exception as e:
+        logger.warning("OpenClaw stream failed: %s", e)
+        yield OPENCLAW_UNAVAILABLE_MSG
+
+
+def execute_stream(
+    message: str,
+    history: list[dict] | None = None,
+    system_context: str | None = None,
+) -> Iterator[str]:
+    """
+    Execute via OpenClaw and stream response chunks. Yields content as it arrives,
+    plus brief feedback for tool calls (e.g. "Searching...", "Running...").
+    Falls back to non-streaming execute if gateway doesn't support streaming.
+    """
+    if not _gateway_port_reachable():
+        yield OPENCLAW_UNAVAILABLE_MSG
+        return
+
+    out_queue: queue.Queue[str | None] = queue.Queue()
+
+    def run_stream():
+        async def consume():
+            try:
+                async for chunk in _execute_stream_async(
+                    message, history=history, system_context=system_context
+                ):
+                    out_queue.put(chunk)
+            except asyncio.TimeoutError:
+                logger.warning("OpenClaw stream timed out")
+                out_queue.put(OPENCLAW_UNAVAILABLE_MSG)
+            except Exception as e:
+                logger.warning("OpenClaw stream consume failed: %s", e)
+                out_queue.put(OPENCLAW_UNAVAILABLE_MSG)
+            finally:
+                out_queue.put(None)
+
+        try:
+            asyncio.run(asyncio.wait_for(consume(), timeout=_get_execute_timeout()))
+        except asyncio.TimeoutError:
+            out_queue.put(OPENCLAW_UNAVAILABLE_MSG)
+            out_queue.put(None)
+
+    thread = threading.Thread(target=run_stream, daemon=True)
+    thread.start()
+
+    while True:
+        try:
+            chunk = out_queue.get(timeout=0.1)
+        except queue.Empty:
+            if not thread.is_alive():
+                break
+            continue
+        if chunk is None:
+            break
+        yield chunk
 
 
 def clear_session() -> bool:
@@ -130,8 +259,8 @@ async def _clear_session_async() -> bool:
             timeout=5,
         )
         async with await OpenClawClient.connect(**config.model_dump()) as client:
-            agent = client.get_agent(OPENCLAW_AGENT_ID)
-            session_key = f"agent:{OPENCLAW_AGENT_ID}:main"
+            agent = client.get_agent(OPENCLAW_AGENT_ID, session_name="gerty")
+            session_key = f"agent:{OPENCLAW_AGENT_ID}:gerty"
             await client.gateway.sessions_reset(session_key)
             return True
     except Exception as e:

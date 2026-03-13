@@ -33,18 +33,18 @@ Use this layout so OpenClaw can find everything:
 └── google-token.json         # Created by the OAuth script (refresh token)
 ```
 
-Copy your client secrets:
+Copy your client secrets (from project root; download from Google Cloud Console or copy from `gerty/openclaw/google_client.json.example` and fill in):
 
 ```bash
 mkdir -p ~/.openclaw/credentials
-cp /home/liam/gerty/gerty/openclaw/google_client.json ~/.openclaw/credentials/google-credentials.json
+cp gerty/openclaw/google_client.json ~/.openclaw/credentials/google-credentials.json
 ```
 
 ## Step 3: OpenClaw Calendar Skill
 
 The **gerty-calendar** skill in `skills/calendar/SKILL.md` teaches OpenClaw to run the calendar script via exec. No custom prompt needed for calendar—the skill provides the instructions. For Gmail/Drive/Sheets/Docs, add to your Gerty custom prompt (Settings):
 
-> When using Gmail, Drive, Sheets, or Docs: ALWAYS run the Gerty scripts. NEVER invent or guess data. Use: `cd /home/liam/gerty && /home/liam/gerty/.venv/bin/python scripts/check_google_gmail.py [N]` (or drive, sheets, docs).
+> When using Gmail, Drive, Sheets, or Docs: ALWAYS run the Gerty scripts. NEVER invent or guess data. Use: `cd /path/to/gerty && .venv/bin/python scripts/check_google_gmail.py [N]` (or drive, sheets, docs).
 
 ## Step 4: Gerty Scripts (Recommended)
 
@@ -71,7 +71,7 @@ The **gog** skill provides a unified CLI for Gmail, Calendar, Drive, Contacts, S
 Then OAuth setup (one-time):
 
 ```bash
-gog auth credentials /home/liam/gerty/gerty/openclaw/google_client.json
+gog auth credentials gerty/openclaw/google_client.json   # or ~/.openclaw/credentials/google-credentials.json
 gog auth add you@gmail.com --services gmail,calendar,drive,contacts,sheets,docs
 ```
 
@@ -91,7 +91,7 @@ Configure the skill with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE
 ## Troubleshooting
 
 **"No token yet" when OpenClaw runs**  
-OpenClaw's exec may use a different `$HOME`. Use absolute paths in scripts: `/home/liam/.openclaw/credentials/google-token.json` instead of `~/.openclaw/credentials/`.
+OpenClaw's exec may use a different `$HOME`. Set `GOOGLE_TOKEN_PATH` in `.env` to an absolute path (e.g. `$HOME/.openclaw/credentials/google-token.json`, expanded at runtime).
 
 **Token must be JSON, not pickle**  
 Our OAuth script saves JSON. If another script uses `pickle.dump()`, it will overwrite the token and break loading. Always use `Credentials.from_authorized_user_file()` with the JSON token—never pickle.

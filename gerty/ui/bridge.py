@@ -19,9 +19,9 @@ def create_bridge(router: Router):
             reply = chat_pipeline_sync(self._router, message, history=self._history)
             self._history.append({"role": "user", "content": message})
             self._history.append({"role": "assistant", "content": reply})
-            # Keep last 20 messages for context
-            if len(self._history) > 20:
-                self._history = self._history[-20:]
+            # Keep last 50 messages for context (was 20; caused OpenClaw empty response at ~20)
+            if len(self._history) > 50:
+                self._history = self._history[-50:]
             return reply
 
         def getHistory(self) -> list[dict]:

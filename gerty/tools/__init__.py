@@ -20,6 +20,7 @@ from gerty.tools.media_control import MediaControlTool
 from gerty.tools.app_launch import AppLaunchTool
 from gerty.tools.browse import BrowseTool
 from gerty.tools.sys_monitor import SysMonitorTool
+from gerty.tools.calendar_tool import CalendarTool
 
 __all__ = [
     "Tool",
@@ -43,4 +44,5 @@ __all__ = [
     "AppLaunchTool",
     "BrowseTool",
     "SysMonitorTool",
+    "CalendarTool",
 ]

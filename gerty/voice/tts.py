@@ -35,8 +35,13 @@ def sanitize_for_speech(text: str) -> str:
     s = _EMOJI_PATTERN.sub("", s)
     # Remove phrases like "smiley face emoji", "grinning emoji" (LLM may spell these)
     s = re.sub(r"\b\w+(?:\s+\w+)?\s+emoji\b", "", s, flags=re.IGNORECASE)
+    # Remove OpenClaw exec/result tags first (raw tool output - sounds awful when read aloud)
+    s = re.sub(r"<exec>[\s\S]*?</exec>", "", s)
+    s = re.sub(r"<result>[\s\S]*?</result>", "", s)
     # Remove markdown code blocks (```...```)
     s = re.sub(r"```[\s\S]*?```", "", s)
+    # Remove unclosed code blocks (```bash command, etc.)
+    s = re.sub(r"```[a-z]*[^\n`]*\n?", "", s)
     # Remove inline code backticks but keep the text
     s = re.sub(r"`([^`]+)`", r"\1", s)
     # Remove markdown bold/italic markers: **text** *text* _text_ __text__
