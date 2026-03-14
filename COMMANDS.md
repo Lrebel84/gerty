@@ -2,7 +2,7 @@
 
 A quick reference for tools and skills you can use with Gerty. Just type or say these phrases in chat, via voice, or in the Telegram bot.
 
-**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat. **Note:** OpenClaw/Grok sometimes returns invented responses instead of using tools; verify critical actions. See [docs/OPENCLAW_DIAGNOSIS.md](docs/OPENCLAW_DIAGNOSIS.md).
+**OpenClaw:** When `GERTY_OPENCLAW_ENABLED=1`, everything except fast-path (time, alarm, timer, etc.) goes to OpenClaw. Gerty passes full chat history and your custom prompt. Say what you want in natural language—no exact phrases needed. When the daemon is down, Gerty falls back to Ollama/OpenRouter chat. **Security:** Gerty screens messages before sending to OpenClaw—risky requests (e.g. "run rm -rf", "cat .env") are blocked and never reach OpenClaw. See [docs/SECURITY_POLICY.md](docs/SECURITY_POLICY.md). **Note:** OpenClaw/Grok sometimes returns invented responses instead of using tools; verify critical actions. See [docs/OPENCLAW_DIAGNOSIS.md](docs/OPENCLAW_DIAGNOSIS.md).
 
 | Section | Tools |
 |---------|-------|
@@ -14,6 +14,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Knowledge | RAG (documents + memory in `data/knowledge/`, `data/rag/`) |
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
+| Maintenance | Incidents, proposals, tasks, diagnostics |
 
 ---
 
@@ -203,6 +204,32 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 ---
 
+## Maintenance (incidents, proposals, diagnostics)
+
+| Command | Example |
+|---------|---------|
+| Create incident | "create incident: RAG indexing fails on large PDFs" |
+| List incidents | "list incidents" / "show open incidents" |
+| Run diagnostics | "run diagnostics" / "diagnostics summary" |
+| Maintenance summary | "maintenance summary" |
+
+*Stored in `data/maintenance/`. See [docs/MAINTENANCE_WORKFLOW.md](docs/MAINTENANCE_WORKFLOW.md).*
+
+---
+
+## CLI modes (terminal)
+
+| Command | Purpose |
+|---------|---------|
+| `python -m gerty` | Start Gerty (default) |
+| `python -m gerty --heartbeat` | Health rotation: diagnostics, friction, incidents; writes artifact when noteworthy |
+| `python -m gerty --validate` | Run do-not-break checks (pytest, etc.) |
+| `python -m gerty --diagnose` | One-off diagnostics (Ollama, OpenClaw, OpenRouter, paths) |
+
+*Gerty's `--heartbeat` is different from the proactive-agent skill's heartbeats (cron → OpenClaw). See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md) § Heartbeat vs Proactive-Agent.*
+
+---
+
 ## Proactive agent (background heartbeats)
 
 When the **proactive-agent** skill is installed and configured, a system cron runs every 4 hours. The agent:
@@ -212,7 +239,7 @@ When the **proactive-agent** skill is installed and configured, a system cron ru
 - Appends findings to `notes/areas/proactive-updates.md`
 - Logs output to `logs/proactive.log`
 
-*Setup:* Complete onboarding (USER.md, SOUL.md). Run `./scripts/setup-proactive-cron.sh` to add the crontab. Test: `./scripts/proactive-heartbeat.sh`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) §8.
+*Setup:* Complete onboarding (USER.md, SOUL.md). Run `./scripts/setup-proactive-cron.sh` to add the crontab. Test: `./scripts/proactive-heartbeat.sh`. See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md) §8. **Not the same as** `python -m gerty --heartbeat` (Gerty's built-in health rotation).
 
 ---
 

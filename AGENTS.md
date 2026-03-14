@@ -94,6 +94,8 @@ Build proactively, but NOTHING goes external without approval.
 
 ## Heartbeats
 
+**Context:** The proactive-agent skill (ClawHub) runs via system cron every 4h and sends a message to the agent—that is the "heartbeat poll." Not the same as `python -m gerty --heartbeat` (Gerty's built-in health rotation). See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md) § Heartbeat vs Proactive-Agent.
+
 When you receive a heartbeat poll, don't just reply "OK." Use it productively:
 
 **Things to check:**

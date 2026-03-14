@@ -16,6 +16,20 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 
 ---
 
+## Gerty vs OpenClaw (single source of truth)
+
+| | Gerty | OpenClaw |
+|---|-------|----------|
+| **What** | Local assistant: router, tools, voice, UI | Optional action layer: calendar, email, exec, files, browser, ClawHub skills |
+| **Where** | `gerty/` package, runs on your machine | Separate daemon (`openclaw daemon start`), Node.js 22+ |
+| **When** | Always running when you use Gerty | Only when `GERTY_OPENCLAW_ENABLED=1` |
+| **Routing** | Fast-path (time, alarm, etc.) → Gerty tools; everything else → OpenClaw when enabled | Receives non-fast-path requests from Gerty |
+| **Security** | **Pre-send screening** (Sprint 10a): blocks risky messages before sending to OpenClaw | dcg-guard, exec-approvals allowlist on OpenClaw side |
+
+**Flow:** User → Gerty (chat/voice/Telegram) → Router → Fast-path tools OR OpenClaw. Before sending to OpenClaw, Gerty runs `screen_openclaw_message()`—blocked requests never reach OpenClaw. See [docs/SECURITY_POLICY.md](SECURITY_POLICY.md).
+
+---
+
 ## Request Flow
 
 ```
@@ -56,8 +70,9 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
          │                            │                            │
          ▼                            ▼                            ▼
 ┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
-│  ToolExecutor    │         │  openclaw-sdk    │         │  SearchTool /    │
-│  (instant)       │         │  agent.execute  │         │  LLM             │
+│  ToolExecutor    │         │  screen_openclaw │         │  SearchTool /    │
+│  (instant)       │         │  _message() then │         │  LLM             │
+│                  │         │  openclaw-sdk   │         │                  │
 └──────────────────┘         └──────────────────┘         └──────────────────┘
          │                            │                            │
          │                   (fallback when OpenClaw down          │
@@ -78,10 +93,14 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 | **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; Option A: OpenClaw for non-fast-path when enabled |
 | **Pipeline** | `gerty/pipeline.py` | Chat pipeline: prompt, history summarization, voice tweaks; calls `router.route_stream()` |
 | **ToolExecutor** | `gerty/tools/base.py` | Registers tools by intent; `execute(intent, message)` dispatches to matching tool |
-| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, etc. |
+| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, MaintenanceTool, etc. |
 | **Voice** | `gerty/voice/` | Wake word (Picovoice/openWakeWord), STT (faster-whisper, Moonshine, Vosk, Groq), TTS (Piper, Kokoro), VAD |
 | **RAG** | `gerty/rag/` | ChromaDB, embedder (nomic-embed-text), parsers (PDF, Excel, Word); on-demand via RagTool |
 | **UI** | `gerty/ui/` | FastAPI server, PyWebView bridge; frontend in `frontend/` (React, Vite) |
+| **Security** | `gerty/security.py` | Trusted tools, forbidden patterns, sensitive paths; `screen_openclaw_message()` before OpenClaw |
+| **Heartbeat** | `gerty/heartbeat.py` | Health rotation: diagnostics, friction tail, health tail, incidents; `python -m gerty --heartbeat` |
+| **Maintenance** | `gerty/maintenance.py` | Incidents, proposals, tasks; path checks before writes |
+| **Observability** | `gerty/observability.py` | Friction log, health log, structured logging |
 
 ---
 
@@ -152,6 +171,17 @@ Key environment variables (see `.env.example`):
 
 ---
 
+## Heartbeat vs Proactive-Agent (avoid confusion)
+
+| Term | What | Where |
+|------|------|-------|
+| **Gerty heartbeat** | Built-in health rotation: diagnostics, friction logs, incidents. Writes to `data/maintenance/heartbeat/` when noteworthy. | `python -m gerty --heartbeat`; see [docs/HEARTBEAT_AND_CRON.md](HEARTBEAT_AND_CRON.md) |
+| **Proactive-agent heartbeats** | ClawHub skill: system cron runs `scripts/proactive-heartbeat.sh` every 4h — runs OpenClaw agent with HEARTBEAT.md checklist, web search, calendar/email checks. | `skills/proactive-agent/`; `notes/areas/proactive-updates.md`; see [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) §8 |
+
+AGENTS.md "heartbeat poll" = when the proactive-agent skill runs (via cron), it sends a message to the agent; that is the poll. Not the same as `python -m gerty --heartbeat`.
+
+---
+
 ## How to Extend
 
 **Adding a new tool:** See [docs/ADDING_TOOLS.md](ADDING_TOOLS.md). Update:
@@ -182,8 +212,14 @@ gerty/
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── research/        # Deep research
 │   ├── telegram/        # Telegram bot
-│   └── ui/              # FastAPI server, PyWebView bridge
+│   ├── ui/              # FastAPI server, PyWebView bridge
+│   ├── heartbeat.py     # Health rotation (--heartbeat)
+│   ├── security.py      # Trusted tools, forbidden patterns, OpenClaw screening
+│   ├── maintenance.py   # Incidents, proposals, tasks
+│   ├── observability.py # Friction log, health log
+│   └── self_improvement.py  # validate(), format_validation_report (--validate)
 ├── frontend/            # React SPA
 ├── data/knowledge/      # RAG documents
+├── data/maintenance/    # Incidents, heartbeat artifacts
 └── docs/                # Documentation
 ```

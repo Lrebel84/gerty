@@ -5,7 +5,7 @@ Gerty can route action requests to [OpenClaw](https://github.com/openclaw/opencl
 ## How It Works (Option A)
 
 1. **Fast path:** Obvious Gerty tools (time, alarm, timer, calculator, notes, weather, RAG) go to Gerty—instant response.
-2. **OpenClaw:** Everything else goes to OpenClaw when enabled. Gerty passes your message plus full chat history and custom prompt (persona) to OpenClaw.
+2. **OpenClaw:** Everything else goes to OpenClaw when enabled. **Before sending**, Gerty runs `screen_openclaw_message()`—risky requests (e.g. "run rm -rf", "cat .env") are blocked and never reach OpenClaw. See [docs/SECURITY_POLICY.md](SECURITY_POLICY.md).
 3. **Fallback:** When the OpenClaw daemon is unreachable, Gerty falls back to Ollama or OpenRouter chat.
 
 OpenClaw handles web search, research, browse, calendar, Gmail, Drive, Tasks, files, browser, and more. No classifier—simple routing.
@@ -159,7 +159,7 @@ GERTY_WORKSPACE=/path/to/your/gerty
 
 Gerty is headless—no one is at the OpenClaw Control UI to approve exec commands. Two options:
 
-**Option A: Full access + DCG Guard (recommended)** — Set `security: "full"` and `ask: "off"` in both `~/.openclaw/exec-approvals.json` (agents.main) and `~/.openclaw/openclaw.json` (tools.exec). Install **dcg-guard** (`clawhub install dcg-guard`, then `bash install.sh` in the skill dir) to block destructive commands (rm -rf, git push --force, etc.) before execution. Safe commands pass; dangerous ones are blocked.
+**Option A: Full access + DCG Guard (recommended)** — Set `security: "full"` and `ask: "off"` in both `~/.openclaw/exec-approvals.json` (agents.main) and `~/.openclaw/openclaw.json` (tools.exec). Install **dcg-guard** (`clawhub install dcg-guard`, then `bash install.sh` in the skill dir) to block destructive commands (rm -rf, git push --force, etc.) before execution. Safe commands pass; dangerous ones are blocked. **Layered security:** Gerty screens messages before sending to OpenClaw (Sprint 10a); dcg-guard runs on the OpenClaw side for exec commands that pass through.
 
 **Option B: Allowlist** — With `ask: "on-miss"`, unallowlisted commands wait for approval and time out. Fix: set `ask: "off"` and allowlist all commands the agent needs (find, which, gog, python, clawhub, etc.). See `~/.openclaw/exec-approvals.json`.
 
@@ -248,7 +248,7 @@ The **proactive-agent** skill (`clawhub install proactive-agent`) makes the agen
 
 The script (`scripts/proactive-heartbeat.sh`) sets PATH for Node 22 and runs `openclaw agent --to <telegram-id>` with an explicit message. Output goes to `logs/proactive.log`; findings are appended to `notes/areas/proactive-updates.md`.
 
-**Prerequisites:** USER.md and SOUL.md populated (from onboarding). HEARTBEAT.md in workspace root. Gateway running when cron fires (Gerty or `openclaw daemon start`).
+**Prerequisites:** USER.md, SOUL.md, HEARTBEAT.md at project root (see `docs/OPENCLAW_WORKSPACE_PLAN.md`). Gateway running when cron fires (Gerty or `openclaw daemon start`).
 
 **Test:** Run `./scripts/proactive-heartbeat.sh` manually. Check `tail logs/proactive.log` and `notes/areas/proactive-updates.md`.
 
@@ -308,6 +308,8 @@ Gerty diagnostics
 ```
 
 When OpenClaw is disabled, `OpenClaw` shows `disabled`. When unreachable, shows `unreachable` with a log message to start the daemon.
+
+**Do-not-break validation:** Run `python -m gerty --validate` (or `--do-not-break`) to execute the full do-not-break checklist (pytest, etc.).
 
 ## Troubleshooting
 

@@ -1,6 +1,8 @@
 # HEARTBEAT.md - Periodic Self-Improvement
 
-> Configure your agent to poll this during heartbeats.
+> **For the proactive-agent skill.** Configure your agent to poll this during proactive-agent heartbeats (cron → `scripts/proactive-heartbeat.sh`).
+>
+> **Not Gerty's built-in heartbeat:** `python -m gerty --heartbeat` is a separate health rotation (diagnostics, friction logs, incidents). See [docs/HEARTBEAT_AND_CRON.md](docs/HEARTBEAT_AND_CRON.md).
 
 ---
 

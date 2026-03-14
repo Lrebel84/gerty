@@ -2,7 +2,7 @@
 
 Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your machine.
 
-**See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md)** for developer onboarding: architecture, request flow, API, and how to extend.
+**See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md)** for developer onboarding: architecture, request flow, Gerty vs OpenClaw, and how to extend. **Security:** [docs/SECURITY_POLICY.md](docs/SECURITY_POLICY.md).
 
 ## Features
 
@@ -161,7 +161,7 @@ When using the desktop launcher, the daemon starts automatically. Otherwise run 
 
 ### 9. Proactive agent (optional – background checks)
 
-The **proactive-agent** skill (ClawHub) runs periodic heartbeats: web search, calendar/email checks, and logs findings. Uses system cron (OpenClaw's built-in cron has issues with isolated sessions + tools).
+The **proactive-agent** skill (ClawHub) runs periodic heartbeats: web search, calendar/email checks, and logs findings. Uses system cron (OpenClaw's built-in cron has issues with isolated sessions + tools). **Not the same as Gerty's built-in heartbeat** (`python -m gerty --heartbeat` — health rotation checks). See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md) § Heartbeat vs Proactive-Agent.
 
 ```bash
 # Add crontab (every 4 hours)
@@ -179,6 +179,11 @@ python -m gerty
 ```
 
 Or launch from your application launcher after running `./scripts/install_desktop.sh`.
+
+**CLI modes:**
+- `python -m gerty --heartbeat` — Health rotation (diagnostics, friction, incidents); writes to `data/maintenance/heartbeat/` when noteworthy. See [docs/HEARTBEAT_AND_CRON.md](docs/HEARTBEAT_AND_CRON.md).
+- `python -m gerty --validate` — Run do-not-break checks (pytest, etc.).
+- `python -m gerty --diagnose` — One-off diagnostics (Ollama, OpenClaw, OpenRouter, paths).
 
 **See [COMMANDS.md](COMMANDS.md) for the full commands reference** – all tools with example phrases for chat, voice, and Telegram. **See [docs/OPENCLAW_INTEGRATION.md](docs/OPENCLAW_INTEGRATION.md)** for OpenClaw setup.
 
@@ -200,21 +205,27 @@ cd frontend && npm run build && cd ..
 ```
 gerty/
 ├── PERFORMANCE.md       # Benchmarks, first-response times, tips
-├── docs/                # ALARM.md, RAG_MEMORY.md; archive/ for old docs
+├── docs/                # ALARM.md, RAG_MEMORY.md, SECURITY_POLICY.md; archive/ for old docs
 ├── gerty/
 │   ├── main.py          # Entry point
 │   ├── config.py        # Environment config
+│   ├── heartbeat.py     # Health rotation (--heartbeat)
+│   ├── security.py      # Trusted tools, forbidden patterns, OpenClaw screening
+│   ├── maintenance.py   # Incidents, proposals, tasks
+│   ├── observability.py # Friction log, health log
+│   ├── self_improvement.py  # validate(), format_validation_report (--validate)
 │   ├── llm/             # Ollama, OpenRouter, router
-│   ├── rag/              # RAG knowledge base (ChromaDB, parsers, embedder)
+│   ├── rag/             # RAG knowledge base (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── openclaw/        # OpenClaw client (action execution when enabled)
 │   ├── research/        # Deep research: OpenRouter :online, table parsing, CSV output
-│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision, maintenance
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/
 │   ├── knowledge/       # Drop files here for RAG indexing
-│   └── rag/             # ChromaDB + index metadata
+│   ├── rag/             # ChromaDB + index metadata
+│   └── maintenance/     # Incidents, heartbeat artifacts
 ├── frontend/            # React SPA
 ├── models/              # Vosk, Piper models
 └── scripts/             # Install helpers, launch_gerty.sh (desktop launcher wrapper)
