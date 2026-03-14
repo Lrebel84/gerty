@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Callable, Iterator
 
 from gerty.config import (
@@ -20,9 +21,87 @@ from gerty.utils.math_extract import extract_math
 
 logger = logging.getLogger(__name__)
 
+# Intent labels (Sprint 2a) — explicit constants for classification
+INTENT_APP_LAUNCH = "app_launch"
+INTENT_SCREEN_VISION = "screen_vision"
+INTENT_SYS_MONITOR = "sys_monitor"
+INTENT_MEDIA_CONTROL = "media_control"
+INTENT_SYSTEM_COMMAND = "system_command"
+INTENT_TIMER = "timer"
+INTENT_TIMEZONE = "timezone"
+INTENT_WEATHER = "weather"
+INTENT_CALENDAR = "calendar"
+INTENT_RAG = "rag"
+INTENT_RESEARCH = "research"
+INTENT_OPENCLAW_DIRECT = "openclaw_direct"
+INTENT_SEARCH = "search"
+INTENT_POMODORO = "pomodoro"
+INTENT_STOPWATCH = "stopwatch"
+INTENT_TIME = "time"
+INTENT_DATE = "date"
+INTENT_CALCULATOR = "calculator"
+INTENT_UNITS = "units"
+INTENT_RANDOM = "random"
+INTENT_NOTES = "notes"
+INTENT_ALARM = "alarm"
+INTENT_COMPLEX = "complex"
+INTENT_BROWSE = "browse"
+INTENT_CHAT = "chat"
+
+ALL_INTENTS = (
+    INTENT_APP_LAUNCH,
+    INTENT_SCREEN_VISION,
+    INTENT_SYS_MONITOR,
+    INTENT_MEDIA_CONTROL,
+    INTENT_SYSTEM_COMMAND,
+    INTENT_TIMER,
+    INTENT_TIMEZONE,
+    INTENT_WEATHER,
+    INTENT_CALENDAR,
+    INTENT_RAG,
+    INTENT_RESEARCH,
+    INTENT_OPENCLAW_DIRECT,
+    INTENT_SEARCH,
+    INTENT_POMODORO,
+    INTENT_STOPWATCH,
+    INTENT_TIME,
+    INTENT_DATE,
+    INTENT_CALCULATOR,
+    INTENT_UNITS,
+    INTENT_RANDOM,
+    INTENT_NOTES,
+    INTENT_ALARM,
+    INTENT_COMPLEX,
+    INTENT_BROWSE,
+    INTENT_CHAT,
+)
+
+
+@dataclass(frozen=True)
+class RoutingDecision:
+    """
+    Result of intent classification. Policy layer (Sprint 2b) will extend.
+    For now holds intent only; routing logic uses intent directly.
+    """
+    intent: str
+
+
 # Fast path: instant Gerty tools—skip OpenClaw classifier
 # Calendar routes to OpenClaw (has gerty-calendar skill); CalendarTool used only when OpenClaw is down
-FAST_PATH_INTENTS = ("time", "date", "alarm", "timer", "calculator", "units", "notes", "stopwatch", "timezone", "weather", "random", "rag")
+FAST_PATH_INTENTS = (
+    INTENT_TIME,
+    INTENT_DATE,
+    INTENT_ALARM,
+    INTENT_TIMER,
+    INTENT_CALCULATOR,
+    INTENT_UNITS,
+    INTENT_NOTES,
+    INTENT_STOPWATCH,
+    INTENT_TIMEZONE,
+    INTENT_WEATHER,
+    INTENT_RANDOM,
+    INTENT_RAG,
+)
 
 # Keywords for intent classification
 # Explicit time queries only—bare "time" was too broad ("do we have time", "it's time to set up")
@@ -119,103 +198,113 @@ COMPLEX_KEYWORDS = [
 
 def classify_intent(text: str) -> str:
     """Classify user intent from message text. Check specific intents before generic."""
+    return _classify_intent_impl(text, browse_enabled=GERTY_BROWSE_ENABLED).intent
+
+
+def classify_to_decision(text: str) -> RoutingDecision:
+    """Classify intent and return a RoutingDecision. Policy layer (Sprint 2b) will extend."""
+    return _classify_intent_impl(text, browse_enabled=GERTY_BROWSE_ENABLED)
+
+
+def _classify_intent_impl(text: str, *, browse_enabled: bool) -> RoutingDecision:
+    """Pure classification logic. browse_enabled allows tests without patching config."""
     lower = text.lower().strip()
     if not lower:
-        return "chat"
+        return RoutingDecision(intent=INTENT_CHAT)
 
     # App launch: "open firefox", "launch vs code" - check before media (open/start could overlap)
     for prefix in APP_LAUNCH_PREFIXES:
         if lower.startswith(prefix) and len(lower) > len(prefix) + 1:
-            return "app_launch"
+            return RoutingDecision(intent=INTENT_APP_LAUNCH)
     for kw in SCREEN_VISION_KEYWORDS:
         if kw in lower:
-            return "screen_vision"
+            return RoutingDecision(intent=INTENT_SCREEN_VISION)
     for kw in SYS_MONITOR_KEYWORDS:
         if kw in lower:
-            return "sys_monitor"
+            return RoutingDecision(intent=INTENT_SYS_MONITOR)
     for kw in MEDIA_KEYWORDS:
         if kw in lower:
-            return "media_control"
+            return RoutingDecision(intent=INTENT_MEDIA_CONTROL)
     for kw in SYSTEM_CMD_KEYWORDS:
         if kw in lower:
-            return "system_command"
+            return RoutingDecision(intent=INTENT_SYSTEM_COMMAND)
     # Check timer before time (timer contains "time")
     for kw in TIMER_KEYWORDS:
         if kw in lower:
-            return "timer"
+            return RoutingDecision(intent=INTENT_TIMER)
     for kw in TIMEZONE_KEYWORDS:
         if kw in lower:
-            return "timezone"
+            return RoutingDecision(intent=INTENT_TIMEZONE)
     for kw in WEATHER_KEYWORDS:
         if kw in lower:
-            return "weather"
+            return RoutingDecision(intent=INTENT_WEATHER)
     for kw in CALENDAR_KEYWORDS:
         if kw in lower:
-            return "calendar"
+            return RoutingDecision(intent=INTENT_CALENDAR)
     for kw in RAG_KEYWORDS:
         if kw in lower:
-            return "rag"
+            return RoutingDecision(intent=INTENT_RAG)
     # Research before search: "research" contains "search", so check research first
     for kw in RESEARCH_KEYWORDS:
         if kw in lower:
-            return "research"
+            return RoutingDecision(intent=INTENT_RESEARCH)
     # Direct OpenClaw: "list my skills" etc — bypass classifier for connection test
     for kw in OPENCLAW_DIRECT_KEYWORDS:
         if kw in lower:
-            return "openclaw_direct"
+            return RoutingDecision(intent=INTENT_OPENCLAW_DIRECT)
     # App integration queries (calendar, gmail, drive, tasks) before browse
     for kw in APP_INTEGRATION_KEYWORDS:
         if kw in lower:
-            return "chat"
+            return RoutingDecision(intent=INTENT_CHAT)
     for kw in BROWSE_KEYWORDS:
-        if kw in lower and GERTY_BROWSE_ENABLED:
-            return "browse"
+        if kw in lower and browse_enabled:
+            return RoutingDecision(intent=INTENT_BROWSE)
     for kw in SEARCH_KEYWORDS:
         if kw in lower:
-            return "search"
+            return RoutingDecision(intent=INTENT_SEARCH)
     for kw in WEB_LOOKUP_KEYWORDS:
         if kw in lower:
-            return "search"
+            return RoutingDecision(intent=INTENT_SEARCH)
     for kw in POMODORO_KEYWORDS:
         if kw in lower:
-            return "pomodoro"
+            return RoutingDecision(intent=INTENT_POMODORO)
     for kw in STOPWATCH_KEYWORDS:
         if kw in lower:
-            return "stopwatch"
+            return RoutingDecision(intent=INTENT_STOPWATCH)
     for kw in TIME_KEYWORDS:
         if kw in lower:
-            return "time"
+            return RoutingDecision(intent=INTENT_TIME)
     for kw in DATE_KEYWORDS:
         if kw == "date":
             # Whole word only: avoid "dated", "outdated", "update" etc.
             if re.search(r"\bdate\b", lower):
-                return "date"
+                return RoutingDecision(intent=INTENT_DATE)
         elif kw in lower:
-            return "date"
+            return RoutingDecision(intent=INTENT_DATE)
     for kw in CALC_KEYWORDS:
         if kw in lower or (kw in ("+", "*") and kw in text):
             # Only route to calculator if we can actually extract a math expression.
             # Avoids false positives like "what's the most controversial episode?"
             if extract_math(text) is not None:
-                return "calculator"
+                return RoutingDecision(intent=INTENT_CALCULATOR)
             break  # matched a calc keyword but no math found -> fall through to chat
     for kw in UNIT_KEYWORDS:
         if kw in lower:
-            return "units"
+            return RoutingDecision(intent=INTENT_UNITS)
     for kw in RANDOM_KEYWORDS:
         if kw in lower:
-            return "random"
+            return RoutingDecision(intent=INTENT_RANDOM)
     for kw in NOTES_KEYWORDS:
         if kw in lower:
-            return "notes"
+            return RoutingDecision(intent=INTENT_NOTES)
     for kw in ALARM_KEYWORDS:
         if kw in lower:
-            return "alarm"
+            return RoutingDecision(intent=INTENT_ALARM)
     for kw in COMPLEX_KEYWORDS:
         if kw in lower:
-            return "complex"
+            return RoutingDecision(intent=INTENT_COMPLEX)
 
-    return "chat"
+    return RoutingDecision(intent=INTENT_CHAT)
 
 
 def parse_timer_duration(text: str) -> int | None:
@@ -334,6 +423,10 @@ class Router:
 
         # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
         if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
+            # Log Google Workspace requests for diagnostics (Sprint 1c)
+            _gw = intent == "calendar" or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
+            if _gw:
+                logger.info("OpenClaw: Google Workspace request intent=%r msg=%r", intent, message[:80])
             from gerty.openclaw.client import execute as openclaw_execute
             openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
             response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
@@ -411,6 +504,9 @@ class Router:
         # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
         # Use execute() (non-streaming) — streaming was causing raw tool output to leak into replies
         if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
+            _gw = intent == "calendar" or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
+            if _gw:
+                logger.info("OpenClaw: Google Workspace request intent=%r msg=%r", intent, message[:80])
             from gerty.openclaw.client import execute as openclaw_execute
             yield "Working on it..."
             openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS

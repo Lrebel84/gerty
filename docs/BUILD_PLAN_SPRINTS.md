@@ -23,7 +23,9 @@
 | **0** | Safety freeze & baseline | 0.5–1 day | — |
 | **1a** | Secrets & path hardening | 0.5–1 day | 0 |
 | **1b** | Config boundary & startup validation | 0.5–1 day | 1a |
-| **2a** | Intent classification (router split) | 1–2 days | 1b |
+| **1c** | Google Workspace diagnostics & stabilization | 0.5–1 day | 1b |
+| **1d** | Google Workspace normalization & portability | 0.5–1 day | 1c |
+| **2a** | Intent classification (router split) | 1–2 days | 1d |
 | **2b** | Policy & execution layers | 1–2 days | 2a |
 | **2c** | Result validation & logging | 0.5–1 day | 2b |
 | **3** | OpenClaw workspace formalization | 1–2 days | 2c |
@@ -142,6 +144,54 @@
 
 ---
 
+# Sprint 1c — Google Workspace Diagnostics & Stabilization
+
+**Goal:** Diagnose and stabilize calendar/Gmail/Drive/Sheets/Docs through OpenClaw. No routing refactor.
+
+**Depends on:** Sprint 1b
+
+## Tasks
+
+1. Trace request path for Google Workspace requests
+2. Add logging for calendar/gmail/drive/docs/sheets intents
+3. Improve empty-response handling ("OpenClaw ran but returned no output")
+4. Add `scripts/check_google_workspace.sh` diagnostic
+5. Document true state in `docs/GOOGLE_WORKSPACE_STATUS.md`
+6. Add validation checklist in `docs/SPRINT_1C_VALIDATION.md`
+
+## Acceptance
+
+- [ ] Google Workspace requests logged at INFO
+- [ ] Empty output returns user-friendly hint (not "Done.")
+- [ ] Diagnostic script runs and reports pass/fail
+- [ ] Status doc reflects actual behavior
+- [ ] Validation checklist covers calendar, gmail, drive, docs, sheets
+
+---
+
+# Sprint 1d — Google Workspace Normalization & Portability
+
+**Goal:** Remove hardcoded paths, normalize integration paths, add single E2E verify, mark status truthfully.
+
+**Depends on:** Sprint 1c
+
+## Tasks
+
+1. Remove hardcoded /home/liam/gerty from skills/calendar and related docs
+2. Normalize paths: GERTY_WORKSPACE in ~/.openclaw/.env
+3. Improve empty-output logging (google_workspace flag)
+4. Add scripts/verify_calendar_openclaw.sh (single E2E command)
+5. Update docs: working / flaky / unsupported per service
+
+## Acceptance
+
+- [ ] No hardcoded /home/liam in skills or integration docs
+- [ ] Primary path documented for calendar and gmail/drive/docs/sheets
+- [ ] verify_calendar_openclaw.sh runs and has clear pass/fail
+- [ ] GOOGLE_WORKSPACE_STATUS marks each service as working, flaky, or unsupported
+
+---
+
 # Sprint 2a — Intent Classification (Router Split)
 
 **Goal:** Split intent classification from execution. Pure classification only.
@@ -169,11 +219,20 @@
 
 ## Acceptance
 
-- [ ] `classify_intent()` is pure and testable
-- [ ] `RoutingDecision` exists and is used
-- [ ] Current routing behavior preserved
-- [ ] Tests for classifier
-- [ ] Do-not-break checklist passes
+- [x] `classify_intent()` is pure and testable
+- [x] `RoutingDecision` exists and is used
+- [x] Current routing behavior preserved
+- [x] Tests for classifier
+- [x] Do-not-break checklist passes
+
+## Completed (2026-03-13)
+
+- **Intent constants:** `INTENT_*` in `gerty/llm/router.py` (time, date, calendar, chat, etc.)
+- **Pure classifier:** `_classify_intent_impl(text, browse_enabled)` — no config import in impl
+- **RoutingDecision:** `@dataclass(frozen=True) RoutingDecision(intent: str)`
+- **classify_to_decision():** Returns `RoutingDecision`; `classify_intent()` returns `.intent` (unchanged API)
+- **Tests:** 44 passing; edge cases: date whole-word, calendar vs app-integration, browse_enabled, openclaw_direct, pomodoro/stopwatch
+- **Routing unchanged:** Router still uses `classify_intent()` → same outcomes
 
 ---
 

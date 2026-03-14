@@ -5,8 +5,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from gerty.llm.router import (
+    INTENT_CALENDAR,
+    INTENT_CHAT,
+    RoutingDecision,
+    _classify_intent_impl,
     _classify_web_intent_fallback,
     classify_intent,
+    classify_to_decision,
     parse_timer_duration,
     Router,
 )
@@ -108,28 +113,70 @@ class TestClassifyIntent:
         assert classify_intent("make a note get groceries") == "notes"
         assert classify_intent("note: buy eggs") == "notes"
 
-    def test_mcp_app_keywords_route_to_chat(self):
-        """Calendar, Gmail, Drive, Tasks queries use MCP tools, not browse."""
-        assert classify_intent("check my Google Calendar for what I've got on this week") == "chat"
-        assert classify_intent("what's on my calendar") == "chat"
+    def test_calendar_keywords_before_app_integration(self):
+        """Calendar-specific phrases match CALENDAR_KEYWORDS first, return calendar intent."""
+        assert classify_intent("what's on my calendar") == "calendar"
+        assert classify_intent("check my calendar") == "calendar"
+        assert classify_intent("check my Google Calendar for what I've got on this week") == "calendar"
+
+    def test_app_integration_keywords_route_to_chat(self):
+        """Gmail, Drive, Tasks (non-calendar) match APP_INTEGRATION_KEYWORDS, return chat."""
         assert classify_intent("check my gmail") == "chat"
         assert classify_intent("show my emails") == "chat"  # "my emails" matches
         assert classify_intent("what's in my Google Drive") == "chat"
 
     def test_browse_disabled_falls_through(self):
-        """When GERTY_BROWSE_ENABLED is False (default), browse keywords fall through to chat."""
-        from unittest.mock import patch
-        with patch("gerty.llm.router.GERTY_BROWSE_ENABLED", False):
-            # "go to" matches BROWSE_KEYWORDS but we only return "browse" when enabled
-            assert classify_intent("go to example.com") == "chat"
+        """When browse_enabled is False, browse keywords fall through to chat."""
+        dec = _classify_intent_impl("go to example.com", browse_enabled=False)
+        assert dec.intent == "chat"
 
     def test_browse_when_enabled(self):
-        """When GERTY_BROWSE_ENABLED is True, browse keywords return browse."""
-        from unittest.mock import patch
-        with patch("gerty.llm.router.GERTY_BROWSE_ENABLED", True):
-            assert classify_intent("go to example.com") == "browse"
-            assert classify_intent("check my GitHub notifications") == "browse"
-            assert classify_intent("visit python.org") == "browse"
+        """When browse_enabled is True, browse keywords return browse."""
+        dec = _classify_intent_impl("go to example.com", browse_enabled=True)
+        assert dec.intent == "browse"
+        dec = _classify_intent_impl("check my GitHub notifications", browse_enabled=True)
+        assert dec.intent == "browse"
+        dec = _classify_intent_impl("visit python.org", browse_enabled=True)
+        assert dec.intent == "browse"
+
+    def test_date_whole_word_only(self):
+        """'date' must be whole word; 'outdated', 'update' should not match date intent."""
+        assert classify_intent("what's the date") == "date"
+        assert classify_intent("outdated document") == "chat"
+        assert classify_intent("update my system") == "chat"
+        assert classify_intent("what date is the meeting") == "date"
+
+    def test_classify_to_decision_returns_routing_decision(self):
+        """classify_to_decision returns RoutingDecision with same intent as classify_intent."""
+        dec = classify_to_decision("what time is it")
+        assert isinstance(dec, RoutingDecision)
+        assert dec.intent == "time"
+        assert classify_intent("what time is it") == dec.intent
+
+    def test_openclaw_direct(self):
+        """Direct OpenClaw keywords bypass classifier for connection test."""
+        assert classify_intent("list my skills") == "openclaw_direct"
+        assert classify_intent("list skills") == "openclaw_direct"
+        assert classify_intent("what can openclaw do") == "openclaw_direct"
+
+    def test_pomodoro_stopwatch(self):
+        """Pomodoro and stopwatch intents. Avoid timer ('minute') and app_launch prefixes."""
+        assert classify_intent("pomodoro") == "pomodoro"
+        assert classify_intent("pomodoro session") == "pomodoro"
+        assert classify_intent("stopwatch") == "stopwatch"
+        assert classify_intent("how long has it been") == "stopwatch"
+
+    def test_units_random(self):
+        """Units and random intents."""
+        assert classify_intent("convert 5 miles to km") == "units"
+        assert classify_intent("pick a random number") == "random"
+
+    def test_calendar_vs_gmail_ordering(self):
+        """Calendar keywords checked before app integration; gmail/drive go to chat."""
+        # "what's on my calendar" in CALENDAR_KEYWORDS -> calendar
+        assert classify_intent("what's on my calendar") == INTENT_CALENDAR
+        # "check my gmail" in APP_INTEGRATION_KEYWORDS only -> chat
+        assert classify_intent("check my gmail") == INTENT_CHAT
 
 
 class TestClassifyWebIntentFallback:

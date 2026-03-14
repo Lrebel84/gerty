@@ -72,6 +72,8 @@ These bypass OpenClaw and go directly to `ToolExecutor`:
 
 **Special:** `APP_INTEGRATION_KEYWORDS` (calendar, gmail, drive, tasks) return `chat` when matched, but `CALENDAR_KEYWORDS` are checked earlier, so calendar queries get `calendar` intent.
 
+**Sprint 2a:** Intent labels are constants (`INTENT_TIME`, `INTENT_CALENDAR`, etc.). `classify_to_decision(text)` returns `RoutingDecision(intent=...)`; `classify_intent(text)` returns the intent string (unchanged).
+
 ### OpenClaw-enabled behavior
 
 When `GERTY_OPENCLAW_ENABLED=1` and intent is **not** in `FAST_PATH_INTENTS`:
@@ -87,6 +89,21 @@ When `GERTY_OPENCLAW_ENABLED=1` and intent is **not** in `FAST_PATH_INTENTS`:
 - **Unavailable message:** "I know what you want, but my action system isn't running right now. Try starting OpenClaw with: openclaw daemon start"
 - **Calendar:** Falls back to `CalendarTool` (runs `scripts/check_google_calendar.py`)
 - **All other intents:** Continue to Gerty chat (Ollama or OpenRouter)
+
+### Explicit degraded mode (Sprint 1b)
+
+When OpenClaw is **enabled but unavailable** (daemon down, timeout, or SDK error):
+
+| User request type | Degraded behavior | Message / action |
+|-------------------|-------------------|-----------------|
+| Fast-path (time, alarm, timer, etc.) | Works normally | Instant tool response |
+| Calendar | CalendarTool fallback | Real calendar data via script |
+| Chat, search, research, etc. | Ollama or OpenRouter | Normal chat/fallback |
+| App integration (gmail, drive) | Chat fallback | OPENCLAW_UNAVAILABLE_MSG |
+
+**Guarantees:** No silent half-failure. Fast-path tools always work. Chat always has Ollama or OpenRouter fallback. Calendar has explicit CalendarTool fallback.
+
+When OpenClaw is **disabled** and user asks for calendar/gmail/drive: returns `OPENCLAW_APP_UNAVAILABLE_MSG` (setup instructions).
 
 ### Web intent fallback (OpenClaw disabled only)
 
