@@ -35,13 +35,19 @@ from gerty.llm.router import Router
 from gerty.notifications import notify
 from gerty.pipeline import chat_pipeline_sync
 from gerty.tools import (
+    AgentDesignerTool,
+    AgentFactoryTool,
+    AgentRunnerTool,
+    IntentOrchestratorTool,
     AlarmsTool,
     AppLaunchTool,
     BrowseTool,
     CalculatorTool,
     CalendarTool,
     MediaControlTool,
+    MaintenanceTool,
     NotesTool,
+    PersonalContextTool,
     PomodoroTool,
     RandomTool,
     RagTool,
@@ -135,6 +141,12 @@ def main():
     executor.register(TimezoneTool())
     executor.register(WeatherTool())
     executor.register(CalendarTool(), ["calendar"])
+    executor.register(MaintenanceTool(), ["maintenance"])
+    executor.register(PersonalContextTool(), ["personal_context"])
+    executor.register(AgentFactoryTool(), ["agent_factory"])
+    executor.register(AgentRunnerTool(), ["agent_runner"])
+    executor.register(AgentDesignerTool(), ["agent_designer"])
+    executor.register(IntentOrchestratorTool(tool_executor=executor.execute), ["intent_orchestrator"])
     executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
     if GERTY_BROWSE_ENABLED:
@@ -148,14 +160,9 @@ def main():
     router = Router(tool_executor=executor.execute)
     executor.register(ScreenVisionTool(router=router), ["screen_vision"])
 
-    # Check Ollama
-    try:
-        import httpx
-        r = httpx.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=2)
-        if r.status_code != 200:
-            logger.warning("Ollama not responding. Start with: ollama serve")
-    except Exception as e:
-        logger.warning("Ollama not running: %s. Start with: ollama serve", e)
+    # Startup diagnostics
+    from gerty.diagnostics import run_diagnostics
+    run_diagnostics()
 
     # Build FastAPI app
     app = create_app(router)

@@ -13,6 +13,15 @@ All notable changes to the Gerty project are documented in this file.
 
 ## [Unreleased]
 
+### System 4: Intent Orchestrator
+
+- **Intent Orchestrator** — Interpret high-level outcome requests ("help me explore", "best next step", "organize this", "build whatever agent we need") and choose the best internal path
+- **Modules:** `gerty/intent_orchestrator.py`, `gerty/tools/intent_orchestrator_tool.py`
+- **Action paths:** direct_answer, use_tool, run_agent, design_agent, create_project_structure, recommend_new_tool, escalate_to_maintenance
+- **Routing:** ORCHESTRATOR_KEYWORDS after agent_* so direct commands (list agents, ask agent X: task) still win
+- **Docs:** [docs/INTENT_ORCHESTRATOR.md](docs/INTENT_ORCHESTRATOR.md)
+- **Tests:** 19 tests in `tests/test_intent_orchestrator.py`; routing precedence in `tests/test_router.py`
+
 ### Build Plan – Sprints 2a, 2b, 2c (stabilize/openclaw-foundation)
 
 Phased improvements from the external review build plan. See `docs/BUILD_PLAN_SPRINTS.md` and `docs/BUILD_PLAN_PROGRESS.md`.
@@ -33,6 +42,14 @@ Phased improvements from the external review build plan. See `docs/BUILD_PLAN_SP
 - `build_openclaw_payload()` — centralized, documented
 - Fallback pattern (trusted direct → OpenClaw → degraded) documented
 - 13 OpenClaw tests; 64 total
+
+#### Sprint 3 – OpenClaw Workspace Formalization
+- `docs/OPENCLAW_WORKSPACE_PLAN.md` — workspace structure, source of truth
+- `workspace/` — notes only (backlog, incidents, proposals, releases, decisions)
+
+#### Sprint 3a – Source-of-Truth Cleanup
+- **Canonical:** Root only. Removed workspace/ duplicates of USER.md, SOUL.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, MEMORY.md.
+- **Symlinks:** Not used; root-only is simpler and lower risk.
 
 ---
 

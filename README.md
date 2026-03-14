@@ -2,7 +2,7 @@
 
 Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your machine.
 
-**See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md)** for developer onboarding: architecture, request flow, Gerty vs OpenClaw, and how to extend. **Security:** [docs/SECURITY_POLICY.md](docs/SECURITY_POLICY.md).
+**See [docs/GERTY_OVERVIEW.md](docs/GERTY_OVERVIEW.md)** for developer onboarding: architecture, request flow, Gerty vs OpenClaw, and how to extend. **Systems:** [Personal Context](docs/PERSONAL_CONTEXT_ENGINE.md), [Agent Factory](docs/AGENT_FACTORY.md), [Agent Designer](docs/AGENT_DESIGNER.md), [Intent Orchestrator](docs/INTENT_ORCHESTRATOR.md). **Security:** [docs/SECURITY_POLICY.md](docs/SECURITY_POLICY.md). **Improvements:** [docs/IMPROVEMENT_BACKLOG.md](docs/IMPROVEMENT_BACKLOG.md).
 
 ## Features
 
@@ -10,7 +10,7 @@ Local AI/LLM voice assistant (Jarvis/Alexa-style). Fully private, runs on your m
 - **Voice** (optional): Wake word **"our Gurt"** (Picovoice; say "our Gurt" not "Gerty"), speech-to-text (faster-whisper, Vosk, or Groq), text-to-speech (Piper). Single-click mic with auto stop. Say **"bye"**, **"thanks"**, **"stop"** to end the conversation; say the wake word during auto-listen to stop listening.
 - **Mobile control**: Telegram bot for commands from your phone
 - **Model router**: Uses Ollama for local inference, OpenRouter for complex tasks
-- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**, **OpenClaw** (action execution: files, browser, calendar, email when enabled)
+- **Toolkit**: Time, date, alarms, timers, calculator, units, notes, stopwatch, timezone, random, weather, web search, **deep research** (OpenRouter), pomodoro, system commands, media/audio, app launching, system monitoring, **screen vision**, **personal context** (goals, projects, routines; controlled updates), **agent factory** (create/list agents), **agent designer** (design/improve agents), **agent invocation** (ask/run/use agent), **intent orchestrator** (interpret high-level outcome requests), **OpenClaw** (action execution: files, browser, calendar, email when enabled)
 - **RAG Knowledge Base**: Drop PDF, Excel, Word, or text files into `data/knowledge/`; enable in Settings, then say "check my docs for X" to search. Long-term memory extracts facts from chat (Settings toggle). On-demand only (no automatic injection) for fast chat. See [docs/RAG_MEMORY.md](docs/RAG_MEMORY.md).
 - **Web search** (optional): `pip install duckduckgo-search`. Routes by intent: "search for X", "get me contact details for Y", "when is showtimes of Z", etc. OpenRouter uses quick search for simple lookups.
 - **Deep research** (OpenRouter): Multi-step web research, comparisons, spreadsheets. Requires OpenRouter in Settings. When OpenClaw is enabled, everything except fast-path (time, alarm, etc.) goes to OpenClaw; when the daemon is down, Gerty falls back to Ollama/OpenRouter chat. See COMMANDS.md.
@@ -219,14 +219,21 @@ gerty/
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── openclaw/        # OpenClaw client (action execution when enabled)
 │   ├── research/        # Deep research: OpenRouter :online, table parsing, CSV output
-│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision, maintenance
+│   ├── tools/           # Time, alarms, timers, calculator, units, notes, weather, search, browse, pomodoro, system, media, app_launch, sys_monitor, screen_vision, maintenance, personal_context, agent_factory
+│   ├── personal_context.py  # System 1: goals, projects, routines, controlled updates
+│   ├── agent_factory.py     # System 2: create agents
+│   ├── agent_registry.py    # System 2: list/get agents
 │   ├── telegram/        # Telegram bot
 │   └── ui/              # FastAPI server, PyWebView
 ├── data/
 │   ├── knowledge/       # Drop files here for RAG indexing
 │   ├── rag/             # ChromaDB + index metadata
-│   └── maintenance/     # Incidents, heartbeat artifacts
+│   ├── maintenance/     # Incidents, heartbeat artifacts
+│   ├── personal_context/   # System 1: profile, goals, projects, routines
+│   └── agents/          # System 2: created agents
 ├── frontend/            # React SPA
+├── templates/           # Agent Factory: base_agent template
+├── config/              # model_profiles.json (agent model config)
 ├── models/              # Vosk, Piper models
 └── scripts/             # Install helpers, launch_gerty.sh (desktop launcher wrapper)
 ```

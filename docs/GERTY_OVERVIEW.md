@@ -93,9 +93,13 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 | **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; Option A: OpenClaw for non-fast-path when enabled |
 | **Pipeline** | `gerty/pipeline.py` | Chat pipeline: prompt, history summarization, voice tweaks; calls `router.route_stream()` |
 | **ToolExecutor** | `gerty/tools/base.py` | Registers tools by intent; `execute(intent, message)` dispatches to matching tool |
-| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, MaintenanceTool, etc. |
+| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, MaintenanceTool, PersonalContextTool, AgentFactoryTool, AgentRunnerTool, AgentDesignerTool, IntentOrchestratorTool, etc. |
 | **Voice** | `gerty/voice/` | Wake word (Picovoice/openWakeWord), STT (faster-whisper, Moonshine, Vosk, Groq), TTS (Piper, Kokoro), VAD |
 | **RAG** | `gerty/rag/` | ChromaDB, embedder (nomic-embed-text), parsers (PDF, Excel, Word); on-demand via RagTool |
+| **Personal Context** | `gerty/personal_context.py`, `gerty/tools/personal_context_tool.py` | System 1: goals, projects, routines, controlled updates; see [PERSONAL_CONTEXT_ENGINE.md](PERSONAL_CONTEXT_ENGINE.md) |
+| **Agent Factory** | `gerty/agent_factory.py`, `gerty/agent_registry.py`, `gerty/tools/agent_factory_tool.py` | System 2: create/list agents from templates; see [AGENT_FACTORY.md](AGENT_FACTORY.md) |
+| **Agent Designer** | `gerty/agent_designer.py`, `gerty/tools/agent_designer_tool.py` | System 3: design/improve agents; see [AGENT_DESIGNER.md](AGENT_DESIGNER.md) |
+| **Intent Orchestrator** | `gerty/intent_orchestrator.py`, `gerty/tools/intent_orchestrator_tool.py` | System 4: interpret high-level outcome requests, recommend or invoke best path; see [INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md) |
 | **UI** | `gerty/ui/` | FastAPI server, PyWebView bridge; frontend in `frontend/` (React, Vite) |
 | **Security** | `gerty/security.py` | Trusted tools, forbidden patterns, sensitive paths; `screen_openclaw_message()` before OpenClaw |
 | **Heartbeat** | `gerty/heartbeat.py` | Health rotation: diagnostics, friction tail, health tail, incidents; `python -m gerty --heartbeat` |
@@ -149,6 +153,11 @@ The router uses **keyword-based** intent classification. Order matters: specific
 | media_control | "play", "pause", "skip" |
 | system_command | "lock screen", "suspend" |
 | sys_monitor | "cpu usage", "memory usage" |
+| personal_context | "my goals", "add goal", "update project", "my routines" |
+| agent_factory | "create agent", "list agents" |
+| agent_runner | "ask agent X: task", "run agent X: task" |
+| agent_designer | "design agent", "improve agent", "suggest agent for" |
+| intent_orchestrator | "help me explore", "best next step", "turn this into", "organize this" |
 | chat / complex | Fallback; may trigger web intent fallback |
 
 **OpenClaw (when enabled):** Option A—everything except fast-path goes to OpenClaw. Gerty passes full chat history and custom prompt. When the daemon is unreachable, Gerty falls back to Ollama/OpenRouter chat. **Headless:** Use `security: "full"` + `ask: "off"` with **dcg-guard** (blocks rm -rf, destructive git, etc.), or allowlist commands. **Caveat:** OpenClaw/Grok sometimes returns invented responses instead of using tools; behaviour is inconsistent. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) and [docs/OPENCLAW_DIAGNOSIS.md](OPENCLAW_DIAGNOSIS.md).
@@ -194,6 +203,7 @@ AGENTS.md "heartbeat poll" = when the proactive-agent skill runs (via cron), it 
 
 **OpenClaw integration:** See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md).
 
+**Discovered a weakness or limitation?** Log it in [docs/IMPROVEMENT_BACKLOG.md](IMPROVEMENT_BACKLOG.md). Critical → fix now. Non-blocking → add to backlog so it is not lost.
 
 ---
 
@@ -206,7 +216,12 @@ gerty/
 ├── pipeline.py          # Chat pipeline
 ├── gerty/
 │   ├── llm/             # Router, Ollama, OpenRouter
-│   ├── tools/           # Built-in tools
+│   ├── tools/           # Built-in tools (incl. personal_context, agent_factory)
+│   ├── personal_context.py  # System 1: goals, projects, routines
+│   ├── agent_factory.py     # System 2: create agents
+│   ├── agent_registry.py   # System 2: list/get agents
+│   ├── agent_designer.py   # System 3: design/improve agents
+│   ├── intent_orchestrator.py  # System 4: interpret outcome requests
 │   ├── openclaw/        # OpenClaw client (action execution)
 │   ├── rag/             # RAG (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
@@ -219,7 +234,20 @@ gerty/
 │   ├── observability.py # Friction log, health log
 │   └── self_improvement.py  # validate(), format_validation_report (--validate)
 ├── frontend/            # React SPA
+├── templates/           # Agent Factory: base_agent template
+├── config/              # model_profiles.json
 ├── data/knowledge/      # RAG documents
 ├── data/maintenance/    # Incidents, heartbeat artifacts
+├── data/personal_context/  # System 1: profile, goals, projects, routines
+├── data/agents/         # System 2: created agents
 └── docs/                # Documentation
 ```
+
+## Systems (beyond build plan)
+
+| System | Purpose | Docs |
+|--------|---------|------|
+| **System 1: Personal Context** | Goals, projects, routines, preferences; controlled updates | [PERSONAL_CONTEXT_ENGINE.md](PERSONAL_CONTEXT_ENGINE.md) |
+| **System 2: Agent Factory** | Create and list agents from templates; invoke agents | [AGENT_FACTORY.md](AGENT_FACTORY.md) |
+| **System 3: Agent Designer** | Design/improve agents with high-quality specs; draft-first | [AGENT_DESIGNER.md](AGENT_DESIGNER.md) |
+| **System 4: Intent Orchestrator** | Interpret high-level outcome requests; recommend or invoke best path | [INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md) |

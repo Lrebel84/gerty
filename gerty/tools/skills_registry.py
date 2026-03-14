@@ -152,6 +152,48 @@ SKILLS: list[SkillEntry] = [
         "description": "CPU, RAM, top processes",
         "examples": ["why are my fans spinning", "what's using CPU", "system status"],
     },
+    # Maintenance (Sprint 5)
+    {
+        "category": "Maintenance",
+        "name": "Maintenance",
+        "description": "Create incidents, proposals, tasks; list; summarize; collect logs; run diagnostics",
+        "examples": ["create incident: OpenClaw timeout - description", "maintenance summary", "list incidents", "run diagnostics"],
+    },
+    # Personal Context (System 1)
+    {
+        "category": "Context",
+        "name": "Personal context",
+        "description": "Who Liam is, his goals, projects, preferences (read-only)",
+        "examples": ["who am I", "what are my goals", "personal context", "my projects"],
+    },
+    # Agent Factory (System 2)
+    {
+        "category": "Agents",
+        "name": "Agent Factory",
+        "description": "Create and manage specialized agents",
+        "examples": ["create agent: market_researcher - researches market opportunities", "list agents", "show agent builder"],
+    },
+    # Agent Runner (System 2 v1.1)
+    {
+        "category": "Agents",
+        "name": "Agent invocation",
+        "description": "Invoke an agent for a bounded task (ask/run/use agent)",
+        "examples": ["ask agent market_researcher: summarize top 3 competitors", "run agent builder: outline a landing page", "use agent content_marketer: write a tagline"],
+    },
+    # Agent Designer (System 3)
+    {
+        "category": "Agents",
+        "name": "Agent Designer",
+        "description": "Design or improve agents with high-quality specs (draft-first)",
+        "examples": ["design agent: niche_finder - finds AI business opportunities", "improve agent market_researcher", "suggest agent for: validating SaaS ideas", "create from design niche_finder"],
+    },
+    # Intent Orchestrator (System 4)
+    {
+        "category": "Agents",
+        "name": "Intent Orchestrator",
+        "description": "Interpret high-level outcome requests and recommend or invoke the right path (explore, organize, best next step)",
+        "examples": ["help me explore tattoo AI business ideas", "I want to turn this into a real project", "what is the best next step for this goal", "if we don't have the right tool, propose one"],
+    },
 ]
 
 

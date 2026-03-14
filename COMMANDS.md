@@ -217,6 +217,74 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 
 ---
 
+## Personal context
+
+| Command | Example |
+|---------|---------|
+| Who am I | "who am I" / "about me" |
+| Goals | "what are my goals" / "my goals" |
+| Projects | "what are my projects" / "my projects" |
+| Schedule | "my schedule" / "work schedule" |
+| Preferences | "my preferences" / "my values" |
+| Add idea | "add idea: build a SaaS for X" |
+| Add goal | "add goal: ship Gerty v2" |
+| Add project | "add project: Website redesign" |
+| Update project | "update project status Gerty to paused" |
+| Update goal | "update goal status X to done" |
+| Add preference note | "add preference note: prefer dark mode" |
+| Add business concept | "add business concept: AI content agency" |
+
+*Source: `data/personal_context/`. See [docs/PERSONAL_CONTEXT_ENGINE.md](docs/PERSONAL_CONTEXT_ENGINE.md).*
+
+---
+
+## Agent Factory (create agents)
+
+| Command | Example |
+|---------|---------|
+| Create agent | "create agent: market_researcher - researches market opportunities and competition" |
+| List agents | "list agents" |
+| Show agent | "show agent market_researcher" |
+
+*See [docs/AGENT_FACTORY.md](docs/AGENT_FACTORY.md).*
+
+## Agent invocation (run agents)
+
+| Command | Example |
+|---------|---------|
+| Ask agent | "ask agent market_researcher: summarize the top 3 competitors" |
+| Run agent | "run agent builder: outline a landing page for a SaaS product" |
+| Use agent | "use agent content_marketer: write a tagline for a tattoo studio" |
+
+*Single-shot, synchronous. Creates task and output artifacts. See [docs/AGENT_FACTORY.md](docs/AGENT_FACTORY.md) § Agent Invocation.*
+
+## Agent Designer (design/improve agents)
+
+| Command | Example |
+|---------|---------|
+| Design agent | "design agent: niche_finder - finds unsaturated AI business opportunities for tattoo-related digital products" |
+| Improve agent | "improve agent market_researcher" |
+| Suggest agent | "suggest agent for: researching and validating SaaS ideas for tattoo artists" |
+| Show agent design | "show agent design market_researcher" |
+| Create from design | "create from design niche_finder" |
+
+*Draft-first: inspect design before creating. See [docs/AGENT_DESIGNER.md](docs/AGENT_DESIGNER.md).*
+
+## Intent Orchestrator (high-level outcome requests)
+
+| Command | Example |
+|---------|---------|
+| Help explore | "help me explore tattoo-related AI business ideas" |
+| Organize | "help me organize this business idea properly" |
+| Turn into project | "I want to turn this into a real project" |
+| Build agent | "build whatever agent we need for researching this" |
+| Propose tool | "if we do not have the right tool, propose one" |
+| Best next step | "what is the best next step for this goal" |
+
+*Interprets natural-language outcome requests and recommends or invokes the right path (agent, tool, design, project structure). Direct commands (list agents, ask agent X: task) still work unchanged. See [docs/INTENT_ORCHESTRATOR.md](docs/INTENT_ORCHESTRATOR.md).*
+
+---
+
 ## CLI modes (terminal)
 
 | Command | Purpose |

@@ -32,4 +32,5 @@ export const SKILLS: Skill[] = [
   { category: "System", name: "Media & audio", description: "Play, pause, skip, mute, volume", examples: ["play", "pause", "skip", "mute", "volume up"] },
   { category: "System", name: "App launching", description: "Open applications by name", examples: ["open Firefox", "launch VS Code", "start Terminal"] },
   { category: "System", name: "System monitoring", description: "CPU, RAM, top processes", examples: ["why are my fans spinning", "what's using CPU", "system status"] },
+  { category: "Agents", name: "Intent Orchestrator", description: "Interpret high-level outcome requests and recommend or invoke the right path (explore, organize, best next step)", examples: ["help me explore tattoo AI business ideas", "I want to turn this into a real project", "what is the best next step for this goal", "if we don't have the right tool, propose one"] },
 ]

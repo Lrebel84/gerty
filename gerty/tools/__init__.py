@@ -21,6 +21,12 @@ from gerty.tools.app_launch import AppLaunchTool
 from gerty.tools.browse import BrowseTool
 from gerty.tools.sys_monitor import SysMonitorTool
 from gerty.tools.calendar_tool import CalendarTool
+from gerty.tools.maintenance_tool import MaintenanceTool
+from gerty.tools.personal_context_tool import PersonalContextTool
+from gerty.tools.agent_designer_tool import AgentDesignerTool
+from gerty.tools.agent_factory_tool import AgentFactoryTool
+from gerty.tools.agent_runner_tool import AgentRunnerTool
+from gerty.tools.intent_orchestrator_tool import IntentOrchestratorTool
 
 __all__ = [
     "Tool",
@@ -45,4 +51,10 @@ __all__ = [
     "BrowseTool",
     "SysMonitorTool",
     "CalendarTool",
+    "MaintenanceTool",
+    "PersonalContextTool",
+    "AgentDesignerTool",
+    "AgentFactoryTool",
+    "AgentRunnerTool",
+    "IntentOrchestratorTool",
 ]

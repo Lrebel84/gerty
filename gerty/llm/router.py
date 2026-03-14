@@ -2,8 +2,11 @@
 
 import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Callable, Iterator
+
+from gerty.observability import log_event, log_friction, maybe_log_user_friction
 
 from gerty.config import (
     GERTY_BROWSE_ENABLED,
@@ -46,6 +49,12 @@ INTENT_NOTES = "notes"
 INTENT_ALARM = "alarm"
 INTENT_COMPLEX = "complex"
 INTENT_BROWSE = "browse"
+INTENT_MAINTENANCE = "maintenance"
+INTENT_PERSONAL_CONTEXT = "personal_context"
+INTENT_AGENT_FACTORY = "agent_factory"
+INTENT_AGENT_RUNNER = "agent_runner"
+INTENT_AGENT_DESIGNER = "agent_designer"
+INTENT_ORCHESTRATOR = "intent_orchestrator"
 INTENT_CHAT = "chat"
 
 ALL_INTENTS = (
@@ -73,6 +82,12 @@ ALL_INTENTS = (
     INTENT_ALARM,
     INTENT_COMPLEX,
     INTENT_BROWSE,
+    INTENT_MAINTENANCE,
+    INTENT_PERSONAL_CONTEXT,
+    INTENT_AGENT_FACTORY,
+    INTENT_AGENT_RUNNER,
+    INTENT_AGENT_DESIGNER,
+    INTENT_ORCHESTRATOR,
     INTENT_CHAT,
 )
 
@@ -121,10 +136,17 @@ TOOL_INTENTS = (
     INTENT_SYSTEM_COMMAND,
     INTENT_SYS_MONITOR,
     INTENT_SCREEN_VISION,
+    INTENT_MAINTENANCE,
+    INTENT_PERSONAL_CONTEXT,
+    INTENT_AGENT_FACTORY,
+    INTENT_AGENT_RUNNER,
+    INTENT_AGENT_DESIGNER,
+    INTENT_ORCHESTRATOR,
 )
 
 # Fast path: instant Gerty tools—skip OpenClaw classifier
 # Calendar routes to OpenClaw (has gerty-calendar skill); CalendarTool used only when OpenClaw is down
+# Maintenance: NOT in FAST_PATH; policy routes local commands to tool, broader to chat (Sprint 5a)
 FAST_PATH_INTENTS = (
     INTENT_TIME,
     INTENT_DATE,
@@ -138,6 +160,11 @@ FAST_PATH_INTENTS = (
     INTENT_WEATHER,
     INTENT_RANDOM,
     INTENT_RAG,
+    INTENT_PERSONAL_CONTEXT,
+    INTENT_AGENT_FACTORY,
+    INTENT_AGENT_RUNNER,
+    INTENT_AGENT_DESIGNER,
+    INTENT_ORCHESTRATOR,
 )
 
 # Keywords for intent classification
@@ -183,6 +210,101 @@ WEB_LOOKUP_KEYWORDS = [
     "can you get me", "look up the", "what's the phone", "what's the address",
 ]
 POMODORO_KEYWORDS = ["pomodoro"]
+MAINTENANCE_KEYWORDS = [
+    "maintenance",
+    "create incident",
+    "log incident",
+    "create proposal",
+    "maintenance task",
+    "maintenance status",
+    "maintenance summary",
+    "list incidents",
+    "list proposals",
+    "list tasks",
+    "list releases",
+    "run diagnostics",
+    "collect logs",
+    "recent logs",
+]
+# Local maintenance: explicit commands that route to tool. Broader maintenance (planning, analysis) goes to chat.
+PERSONAL_CONTEXT_KEYWORDS = [
+    "who am i",
+    "who is liam",
+    "about me",
+    "my goals",
+    "my projects",
+    "personal context",
+    "what are my goals",
+    "what are my projects",
+    "context summary",
+    "remind me about liam",
+    "remind me about my goals",
+    "remind me about my projects",
+    "add idea",
+    "add goal",
+    "add project",
+    "update project status",
+    "update goal status",
+    "add preference note",
+    "add business idea",
+    "add business concept",
+    "my schedule",
+    "work schedule",
+]
+# Agent designer: design/improve/suggest — check BEFORE agent_runner and agent_factory
+AGENT_DESIGNER_KEYWORDS = [
+    "design agent",
+    "improve agent",
+    "suggest agent",
+    "show agent design",
+    "create from design",
+]
+# Agent invocation: ask/run/use agent X — check BEFORE agent_factory
+AGENT_RUNNER_KEYWORDS = [
+    "ask agent",
+    "run agent",
+    "use agent",
+]
+AGENT_FACTORY_KEYWORDS = [
+    "create agent",
+    "new agent",
+    "build agent",
+    "list agents",
+    "show agent",
+]
+# Intent orchestrator: high-level outcome requests (check after agent_* so direct commands win)
+ORCHESTRATOR_KEYWORDS = [
+    "help me explore",
+    "help me organize",
+    "turn this into",
+    "build whatever agent",
+    "if we don't have the right tool",
+    "if we do not have the right tool",
+    "propose one",
+    "best next step",
+    "what's the best way to",
+    "what is the best next step",
+    "organize this",
+    "what should i do",
+    "how do i get started",
+    "i want to turn this into",
+]
+LOCAL_MAINTENANCE_PATTERNS = (
+    "create incident",
+    "log incident",
+    "create proposal",
+    "create task",
+    "create release",
+    "list incidents",
+    "list proposals",
+    "list tasks",
+    "list releases",
+    "maintenance summary",
+    "maintenance status",
+    "collect logs",
+    "recent logs",
+    "run diagnostics",
+)
 # System tools - check before generic chat
 APP_LAUNCH_PREFIXES = ["open ", "launch ", "start ", "run "]
 MEDIA_KEYWORDS = ["play", "pause", "skip", "next track", "previous", "mute", "unmute", "volume up", "volume down"]
@@ -238,6 +360,24 @@ def classify_intent(text: str) -> str:
     return _classify_intent_impl(text, browse_enabled=GERTY_BROWSE_ENABLED).intent
 
 
+def _is_local_maintenance_command(message: str) -> bool:
+    """
+    True if message is an explicit local maintenance command (create, list, summary, logs, diagnostics).
+    Broader maintenance (planning, analysis, "what should I fix") returns False → routes to chat.
+    """
+    lower = message.lower().strip()
+    if any(pat in lower for pat in LOCAL_MAINTENANCE_PATTERNS):
+        return True
+    # Standalone "maintenance" → tool (preserve Sprint 5 behavior)
+    if lower in ("maintenance", "maintenance help", "maintenance?"):
+        return True
+    if len(lower) <= 25 and "maintenance" in lower:
+        # Short maintenance-only; avoid "what maintenance do I need" etc.
+        if not any(q in lower for q in ("what", "how", "why", "analyze", "suggest", "recommend", "should", "need")):
+            return True
+    return False
+
+
 def classify_to_decision(text: str) -> RoutingDecision:
     """Classify intent and return a RoutingDecision (intent only). Use apply_policy for full decision."""
     return _classify_intent_impl(text, browse_enabled=GERTY_BROWSE_ENABLED)
@@ -265,6 +405,16 @@ def apply_policy(
             provider=PROVIDER_TOOL,
             tool_intent=intent,
         )
+
+    # Maintenance: local commands → tool; broader (planning, analysis) → chat (room for future workflows)
+    if intent == INTENT_MAINTENANCE:
+        if _is_local_maintenance_command(message) and tool_executor_present:
+            return RoutingDecision(
+                intent=intent,
+                provider=PROVIDER_TOOL,
+                tool_intent=intent,
+            )
+        return RoutingDecision(intent=intent, provider=PROVIDER_CHAT)
 
     if openclaw_enabled and intent not in FAST_PATH_INTENTS:
         return RoutingDecision(
@@ -314,6 +464,36 @@ def _classify_intent_impl(text: str, *, browse_enabled: bool) -> RoutingDecision
     lower = text.lower().strip()
     if not lower:
         return RoutingDecision(intent=INTENT_CHAT)
+
+    # Maintenance: check before app_launch so "run diagnostics" doesn't match "run "
+    for kw in MAINTENANCE_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_MAINTENANCE)
+
+    # Personal context: who am I, goals, projects (read-only)
+    for kw in PERSONAL_CONTEXT_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_PERSONAL_CONTEXT)
+
+    # Agent designer: design/improve/suggest (before agent_runner and agent_factory)
+    for kw in AGENT_DESIGNER_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_AGENT_DESIGNER)
+
+    # Agent invocation: ask/run/use agent (before agent_factory)
+    for kw in AGENT_RUNNER_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_AGENT_RUNNER)
+
+    # Agent factory: create/list/show agents
+    for kw in AGENT_FACTORY_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_AGENT_FACTORY)
+
+    # Intent orchestrator: high-level outcome requests (after direct agent commands)
+    for kw in ORCHESTRATOR_KEYWORDS:
+        if kw in lower:
+            return RoutingDecision(intent=INTENT_ORCHESTRATOR)
 
     # App launch: "open firefox", "launch vs code" - check before media (open/start could overlap)
     for prefix in APP_LAUNCH_PREFIXES:
@@ -527,6 +707,14 @@ class Router:
             tool_executor_present=bool(self._tool_executor),
             web_fallback_enabled=GERTY_WEB_INTENT_FALLBACK,
         )
+        maybe_log_user_friction(message, source=source)
+        log_event(
+            "route_decision",
+            intent=decision.intent,
+            provider=decision.provider,
+            source=source,
+            msg_len=len(message),
+        )
         return self._execute_route(decision, message, history, custom_prompt)
 
     def _execute_route(
@@ -543,7 +731,15 @@ class Router:
         intent = decision.intent
 
         if decision.provider == PROVIDER_TOOL and decision.tool_intent and self._tool_executor:
-            return self._tool_executor(decision.tool_intent, message)
+            t0 = time.perf_counter()
+            out = self._tool_executor(decision.tool_intent, message)
+            log_event(
+                "tool_call",
+                intent=decision.tool_intent,
+                provider=PROVIDER_TOOL,
+                elapsed_ms=round((time.perf_counter() - t0) * 1000),
+            )
+            return out
 
         if decision.provider == PROVIDER_OPENCLAW:
             _gw = intent == INTENT_CALENDAR or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
@@ -551,20 +747,48 @@ class Router:
                 logger.info("OpenClaw: Google Workspace request intent=%r msg=%r", intent, message[:80])
             from gerty.openclaw.client import execute as openclaw_execute
             openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
+            t0 = time.perf_counter()
             response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
+            elapsed_ms = round((time.perf_counter() - t0) * 1000)
             if response != OPENCLAW_UNAVAILABLE_MSG:
+                log_event("openclaw_result", intent=intent, success=True, elapsed_ms=elapsed_ms)
                 return response
+            log_event(
+                "openclaw_result",
+                intent=intent,
+                success=False,
+                unavailable=True,
+                elapsed_ms=elapsed_ms,
+            )
             if decision.openclaw_fallback_calendar and self._tool_executor:
-                return self._tool_executor(INTENT_CALENDAR, message)
+                log_friction("openclaw_fallback_calendar", intent=intent, reason="unavailable")
+                t1 = time.perf_counter()
+                out = self._tool_executor(INTENT_CALENDAR, message)
+                log_event(
+                    "tool_call",
+                    intent=INTENT_CALENDAR,
+                    provider="openclaw_fallback",
+                    elapsed_ms=round((time.perf_counter() - t1) * 1000),
+                )
+                return out
 
         if decision.provider == PROVIDER_CHAT and decision.run_web_fallback:
             fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
             if fallback == "web_lookup" and self._tool_executor:
-                return self._tool_executor(INTENT_SEARCH, message)
+                log_event("web_fallback", from_intent="chat", to=INTENT_SEARCH, reason=fallback)
+                t0 = time.perf_counter()
+                out = self._tool_executor(INTENT_SEARCH, message)
+                log_event("tool_call", intent=INTENT_SEARCH, provider="web_fallback", elapsed_ms=round((time.perf_counter() - t0) * 1000))
+                return out
             if fallback == "web_research" and self._tool_executor:
-                return self._tool_executor(INTENT_RESEARCH, message)
+                log_event("web_fallback", from_intent="chat", to=INTENT_RESEARCH, reason=fallback)
+                t0 = time.perf_counter()
+                out = self._tool_executor(INTENT_RESEARCH, message)
+                log_event("tool_call", intent=INTENT_RESEARCH, provider="web_fallback", elapsed_ms=round((time.perf_counter() - t0) * 1000))
+                return out
 
         if decision.provider == PROVIDER_APP_UNAVAILABLE and decision.show_app_unavailable:
+            log_event("app_unavailable", intent=intent)
             return OPENCLAW_APP_UNAVAILABLE_MSG
 
         if decision.provider == PROVIDER_COMPLEX and decision.use_reasoning:
@@ -603,6 +827,7 @@ class Router:
         openrouter_model: str | None = None,
         custom_prompt: str | None = None,
         rag_model: str | None = None,
+        source: str | None = None,
     ) -> Iterator[str]:
         """Route message and stream response chunks. Flow: classify -> apply_policy -> execute."""
         decision = classify_to_decision(message)
@@ -612,6 +837,14 @@ class Router:
             openclaw_enabled=GERTY_OPENCLAW_ENABLED,
             tool_executor_present=bool(self._tool_executor),
             web_fallback_enabled=GERTY_WEB_INTENT_FALLBACK,
+        )
+        maybe_log_user_friction(message, source=source or "stream")
+        log_event(
+            "route_decision",
+            intent=decision.intent,
+            provider=decision.provider,
+            source=source or "stream",
+            msg_len=len(message),
         )
         yield from self._execute_route_stream(
             decision, message, history, custom_prompt,
@@ -639,7 +872,14 @@ class Router:
         if decision.provider == PROVIDER_TOOL and decision.tool_intent and self._tool_executor:
             if decision.tool_intent == INTENT_BROWSE:
                 yield "Browsing..."
+            t0 = time.perf_counter()
             result = self._tool_executor(decision.tool_intent, message)
+            log_event(
+                "tool_call",
+                intent=decision.tool_intent,
+                provider=PROVIDER_TOOL,
+                elapsed_ms=round((time.perf_counter() - t0) * 1000),
+            )
             yield result
             return
 
@@ -650,12 +890,30 @@ class Router:
             from gerty.openclaw.client import execute as openclaw_execute
             yield "Working on it..."
             openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
+            t0 = time.perf_counter()
             response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
+            elapsed_ms = round((time.perf_counter() - t0) * 1000)
             if response != OPENCLAW_UNAVAILABLE_MSG:
+                log_event("openclaw_result", intent=intent, success=True, elapsed_ms=elapsed_ms)
                 yield response
                 return
+            log_event(
+                "openclaw_result",
+                intent=intent,
+                success=False,
+                unavailable=True,
+                elapsed_ms=elapsed_ms,
+            )
             if decision.openclaw_fallback_calendar and self._tool_executor:
+                log_friction("openclaw_fallback_calendar", intent=intent, reason="unavailable")
+                t1 = time.perf_counter()
                 result = self._tool_executor(INTENT_CALENDAR, message)
+                log_event(
+                    "tool_call",
+                    intent=INTENT_CALENDAR,
+                    provider="openclaw_fallback",
+                    elapsed_ms=round((time.perf_counter() - t1) * 1000),
+                )
                 yield result
                 return
 
@@ -713,6 +971,7 @@ class Router:
             return
 
         if decision.provider == PROVIDER_APP_UNAVAILABLE and decision.show_app_unavailable:
+            log_event("app_unavailable", intent=intent)
             yield OPENCLAW_APP_UNAVAILABLE_MSG
             return
 

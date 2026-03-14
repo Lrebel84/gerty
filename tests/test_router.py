@@ -7,6 +7,7 @@ import pytest
 from gerty.llm.router import (
     INTENT_CALENDAR,
     INTENT_CHAT,
+    INTENT_MAINTENANCE,
     INTENT_SEARCH,
     PROVIDER_APP_UNAVAILABLE,
     PROVIDER_CHAT,
@@ -16,6 +17,7 @@ from gerty.llm.router import (
     RoutingDecision,
     _classify_intent_impl,
     _classify_web_intent_fallback,
+    _is_local_maintenance_command,
     apply_policy,
     classify_intent,
     classify_to_decision,
@@ -71,6 +73,64 @@ class TestClassifyIntent:
         assert classify_intent("search my files for config") == "rag"
         assert classify_intent("what do my files say about X") == "rag"
         assert classify_intent("check my files for the report") == "rag"
+
+    def test_maintenance(self):
+        assert classify_intent("maintenance summary") == "maintenance"
+        assert classify_intent("create incident: OpenClaw timeout") == "maintenance"
+        assert classify_intent("list incidents") == "maintenance"
+        assert classify_intent("run diagnostics") == "maintenance"
+
+    def test_personal_context(self):
+        assert classify_intent("who am I") == "personal_context"
+        assert classify_intent("what are my goals") == "personal_context"
+        assert classify_intent("personal context") == "personal_context"
+        assert classify_intent("my projects") == "personal_context"
+        assert classify_intent("add idea: build a SaaS") == "personal_context"
+        assert classify_intent("add goal: ship v2") == "personal_context"
+        assert classify_intent("add project: Website") == "personal_context"
+        assert classify_intent("update project status Gerty to paused") == "personal_context"
+        assert classify_intent("my schedule") == "personal_context"
+
+    def test_agent_designer_before_runner_and_factory(self):
+        """Agent designer (design/improve/suggest) routes to agent_designer."""
+        assert classify_intent("design agent: niche_finder - finds AI opportunities") == "agent_designer"
+        assert classify_intent("improve agent market_researcher") == "agent_designer"
+        assert classify_intent("suggest agent for: validating SaaS ideas") == "agent_designer"
+        assert classify_intent("show agent design market_researcher") == "agent_designer"
+        assert classify_intent("create from design niche_finder") == "agent_designer"
+
+    def test_agent_runner_before_agent_factory(self):
+        """Agent invocation (ask/run/use) routes to agent_runner; create/list/show to agent_factory."""
+        assert classify_intent("ask agent market_researcher: summarize competitors") == "agent_runner"
+        assert classify_intent("run agent builder: outline a landing page") == "agent_runner"
+        assert classify_intent("use agent content_marketer: write a tagline") == "agent_runner"
+
+    def test_agent_factory(self):
+        assert classify_intent("create agent: market_researcher - researches markets") == "agent_factory"
+        assert classify_intent("list agents") == "agent_factory"
+        assert classify_intent("show agent builder") == "agent_factory"
+
+    def test_intent_orchestrator_after_agent_commands(self):
+        """Orchestrator keywords route to intent_orchestrator; direct commands still win."""
+        assert classify_intent("help me explore tattoo AI business ideas") == "intent_orchestrator"
+        assert classify_intent("help me organize this business idea properly") == "intent_orchestrator"
+        assert classify_intent("I want to turn this into a real project") == "intent_orchestrator"
+        assert classify_intent("build whatever agent we need for researching this") == "intent_orchestrator"
+        assert classify_intent("if we do not have the right tool, propose one") == "intent_orchestrator"
+        assert classify_intent("what is the best next step for this goal") == "intent_orchestrator"
+        # Direct commands still win
+        assert classify_intent("list agents") == "agent_factory"
+        assert classify_intent("ask agent X: task") == "agent_runner"
+        assert classify_intent("design agent: x - y") == "agent_designer"
+
+    def test_maintenance_local_vs_broader(self):
+        """Sprint 5a: local commands vs broader planning."""
+        assert _is_local_maintenance_command("create incident: X") is True
+        assert _is_local_maintenance_command("maintenance summary") is True
+        assert _is_local_maintenance_command("maintenance") is True
+        assert _is_local_maintenance_command("run diagnostics") is True
+        assert _is_local_maintenance_command("what maintenance do I need to fix") is False
+        assert _is_local_maintenance_command("how should I prioritize maintenance") is False
 
     def test_chat_default(self):
         assert classify_intent("hello") == "chat"
@@ -392,6 +452,35 @@ class TestRouterOpenClawOptionA:
             assert result == "14:30"
             mock_execute.assert_not_called()
             tool_executor.assert_called_with("time", "what time is it")
+
+    def test_maintenance_routes_to_tool(self):
+        """Local maintenance commands route to tool executor."""
+        tool_executor = MagicMock(return_value="# Maintenance summary\n\n## Incidents: 0")
+        router = Router(tool_executor=tool_executor)
+        result = router.route("maintenance summary")
+        tool_executor.assert_called_with("maintenance", "maintenance summary")
+        assert "Maintenance" in result
+
+    def test_maintenance_standalone_routes_to_tool(self):
+        """Standalone 'maintenance' preserves Sprint 5 behavior (Sprint 5a)."""
+        tool_executor = MagicMock(return_value="Maintenance tool. I can: ...")
+        router = Router(tool_executor=tool_executor)
+        result = router.route("maintenance")
+        tool_executor.assert_called_with("maintenance", "maintenance")
+
+    def test_maintenance_broader_routes_to_chat(self):
+        """Broader maintenance (planning, analysis) routes to chat, not tool (Sprint 5a)."""
+        tool_executor = MagicMock()
+        with patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", False):
+            router = Router(tool_executor=tool_executor)
+            router.ollama = MagicMock()
+            router.ollama.is_available.return_value = True
+            router.ollama.chat.return_value = "I can help with maintenance planning."
+            # "what maintenance do I need" → maintenance intent but not local command → chat
+            assert _is_local_maintenance_command("what maintenance do I need to fix") is False
+            result = router.route("what maintenance do I need to fix", history=[])
+            tool_executor.assert_not_called()
+            assert result == "I can help with maintenance planning."
 
 
 class TestParseTimerDuration:
