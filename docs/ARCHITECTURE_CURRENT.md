@@ -100,7 +100,7 @@ flowchart TD
 
 ## Data Flow: OpenClaw Payload
 
-Current `_format_message()` in `openclaw/client.py`:
+Current `build_openclaw_payload()` in `openclaw/client.py`:
 
 ```
 [System: {system_context}]

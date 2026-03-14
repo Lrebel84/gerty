@@ -102,16 +102,43 @@ OpenClaw uses its own config and API keys, separate from Gerty. Key locations:
 - **Chat history:** Gerty sends full chat history so OpenClaw has conversation context.
 - **New chat:** When you click "New chat", Gerty clears both local history and the OpenClaw session.
 
+## Payload construction (Sprint 2c)
+
+OpenClaw receives a single formatted message via `build_openclaw_payload()` in `gerty/openclaw/client.py`:
+
+1. **`[System: {context}]`** — Operating context: custom prompt + tool instructions (OPENCLAW_TOOL_INSTRUCTIONS)
+2. **`Previous conversation:`** — Full history as "User: ..." / "Assistant: ..." lines
+3. **`{message}`** — Current user message
+
+**History policy:** No trimming in the OpenClaw layer. The pipeline may trim (voice) or summarize (chat, local) before passing history.
+
+## Fallback pattern (Sprint 2c)
+
+Three tiers, in order of preference:
+
+| Tier | Name | When | Behavior |
+|------|------|------|----------|
+| 1 | **Trusted direct** | OpenClaw unreachable + calendar intent | CalendarTool runs `scripts/check_google_calendar.py` — real data |
+| 2 | **OpenClaw integration** | OpenClaw reachable | Full OpenClaw execution (skills, exec, web, etc.) |
+| 3 | **Degraded** | OpenClaw unreachable or returns empty/failure | `OPENCLAW_UNAVAILABLE_MSG` or validated empty/failure hint |
+
+**Result validation:** OpenClaw responses are validated (`gerty/openclaw/validation.py`). Empty output, tool failure phrasing, and likely fabricated success are detected and replaced with context-aware hints (e.g. Google Workspace checklist for calendar/gmail/drive).
+
 ## Self-improvement setup (PC/terminal, skills, commands)
 
 To let Gerty/OpenClaw run commands on your PC, install skills from ClawHub, control apps, and improve itself from your instructions:
 
 ### 1. Workspace
 
-Set `agents.defaults.workspace` in `~/.openclaw/openclaw.json` to your Gerty project root so OpenClaw can edit files and install skills there:
+Set `agents.defaults.workspace` in `~/.openclaw/openclaw.json` to your Gerty project root so OpenClaw can edit files and install skills there. Also add `GERTY_WORKSPACE` to `~/.openclaw/.env` for the gerty-calendar skill:
+
+```bash
+# ~/.openclaw/.env
+GERTY_WORKSPACE=/path/to/your/gerty
+```
 
 ```json
-"agents": { "defaults": { "workspace": "/home/you/gerty" } }
+"agents": { "defaults": { "workspace": "/path/to/your/gerty" } }
 ```
 
 ### 2. Exec on gateway (host)
@@ -163,8 +190,8 @@ Create or edit `~/.openclaw/exec-approvals.json` to allow binaries for gateway e
         "/usr/local/bin/npm",
         "/usr/local/bin/node",
         "/usr/local/bin/clawhub",
-        "/home/you/.local/bin/gog",
-        "/home/you/gerty/.venv/bin/python"
+        "/path/to/.local/bin/gog",
+        "/path/to/gerty/.venv/bin/python"
       ]
     }
   }
@@ -202,7 +229,7 @@ In Gerty Settings, add a prompt that tells OpenClaw it can improve Gerty:
 
 > You are Gerty's action system. You can run commands on the host, install skills from ClawHub, edit files in the workspace, and use web search. The workspace is the Gerty project. When asked to add capabilities or improve Gerty, use exec to run clawhub install, edit files, and run tests as needed.
 
-**Google (Calendar, Gmail, Drive, Sheets, Docs):** OAuth token at `~/.openclaw/credentials/google-token.json`. The **gerty-calendar** skill in `skills/calendar/SKILL.md` teaches OpenClaw to run `scripts/check_google_calendar.py` via exec. **Prerequisite:** `tools.exec.host` must be `"gateway"` (not sandbox)—otherwise exec cannot read your credentials. See troubleshooting below.
+**Google (Calendar, Gmail, Drive, Sheets, Docs):** OAuth token at `~/.openclaw/credentials/google-token.json`. Set `GERTY_WORKSPACE` in `~/.openclaw/.env` to your Gerty project root. The **gerty-calendar** skill in `skills/calendar/SKILL.md` teaches OpenClaw to run `scripts/check_google_calendar.py` via exec. **Prerequisite:** `tools.exec.host` must be `"gateway"` (not sandbox)—otherwise exec cannot read your credentials. See docs/GOOGLE_WORKSPACE_STATUS.md for status (calendar: flaky; gmail/drive/sheets/docs: unverified).
 
 ### 7. Timeout for long tasks
 
@@ -260,6 +287,28 @@ Say **"list my skills"** (or "list skills") to verify OpenClaw is connected. Thi
 | Everything else | OpenClaw | When `GERTY_OPENCLAW_ENABLED=1` |
 | Fallback | Ollama or OpenRouter | When OpenClaw daemon unreachable |
 
+## Startup diagnostics
+
+Gerty runs diagnostics on startup and logs Ollama, OpenClaw, OpenRouter, and path status. For a one-off check without starting the full app:
+
+```bash
+python -m gerty --diagnose
+```
+
+Output example:
+
+```
+Gerty diagnostics
+----------------
+  Ollama:        ok
+  OpenClaw:      ok
+  OpenRouter:    configured
+  DATA_DIR:      exists
+  Credentials:   exists
+```
+
+When OpenClaw is disabled, `OpenClaw` shows `disabled`. When unreachable, shows `unreachable` with a log message to start the daemon.
+
 ## Troubleshooting
 
 **OpenClaw returns plausible answers but nothing actually happens (invented skills, fake exec output)**
@@ -294,7 +343,7 @@ openclaw daemon start
 }
 ```
 
-Ensure `~/.openclaw/exec-approvals.json` allowlists `/home/liam/gerty/.venv/bin/python`. Run `./scripts/check_openclaw.sh` to verify.
+Ensure `~/.openclaw/exec-approvals.json` allowlists your Gerty venv Python (e.g. `$GERTY_WORKSPACE/.venv/bin/python`). Run `./scripts/check_openclaw.sh` to verify.
 
 **OpenClaw executes but returns nothing useful**
 

@@ -7,9 +7,16 @@ import pytest
 from gerty.llm.router import (
     INTENT_CALENDAR,
     INTENT_CHAT,
+    INTENT_SEARCH,
+    PROVIDER_APP_UNAVAILABLE,
+    PROVIDER_CHAT,
+    PROVIDER_COMPLEX,
+    PROVIDER_OPENCLAW,
+    PROVIDER_TOOL,
     RoutingDecision,
     _classify_intent_impl,
     _classify_web_intent_fallback,
+    apply_policy,
     classify_intent,
     classify_to_decision,
     parse_timer_duration,
@@ -177,6 +184,101 @@ class TestClassifyIntent:
         assert classify_intent("what's on my calendar") == INTENT_CALENDAR
         # "check my gmail" in APP_INTEGRATION_KEYWORDS only -> chat
         assert classify_intent("check my gmail") == INTENT_CHAT
+
+
+class TestApplyPolicy:
+    """Tests for policy layer: apply_policy produces correct RoutingDecision."""
+
+    def test_fast_path_tool(self):
+        """Fast-path intents -> provider=tool when tool executor present."""
+        dec = RoutingDecision(intent="time")
+        out = apply_policy(
+            dec,
+            message="what time is it",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_TOOL
+        assert out.tool_intent == "time"
+
+    def test_openclaw_when_enabled(self):
+        """Non-fast-path -> openclaw when enabled."""
+        dec = RoutingDecision(intent="search")
+        out = apply_policy(
+            dec,
+            message="search for python",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+        assert out.tool_intent is None
+
+    def test_openclaw_calendar_fallback_flag(self):
+        """Calendar intent with OpenClaw -> openclaw_fallback_calendar when tool present."""
+        dec = RoutingDecision(intent="calendar")
+        out = apply_policy(
+            dec,
+            message="what's on my calendar",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+        assert out.openclaw_fallback_calendar is True
+
+    def test_chat_web_fallback_when_openclaw_disabled(self):
+        """Chat + OpenClaw disabled + no app keywords -> run_web_fallback."""
+        dec = RoutingDecision(intent="chat")
+        out = apply_policy(
+            dec,
+            message="tell me a joke",
+            openclaw_enabled=False,
+            tool_executor_present=True,
+            web_fallback_enabled=True,
+        )
+        assert out.provider == PROVIDER_CHAT
+        assert out.run_web_fallback is True
+
+    def test_app_unavailable_when_chat_and_app_keywords(self):
+        """Chat + OpenClaw disabled + app keywords -> app_unavailable."""
+        dec = RoutingDecision(intent="chat")
+        out = apply_policy(
+            dec,
+            message="check my gmail",
+            openclaw_enabled=False,
+            tool_executor_present=True,
+            web_fallback_enabled=True,
+        )
+        assert out.provider == PROVIDER_APP_UNAVAILABLE
+        assert out.show_app_unavailable is True
+
+    def test_complex_use_reasoning(self):
+        """Complex intent -> provider=complex, use_reasoning."""
+        dec = RoutingDecision(intent="complex")
+        out = apply_policy(
+            dec,
+            message="explain quantum physics",
+            openclaw_enabled=False,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_COMPLEX
+        assert out.use_reasoning is True
+
+    def test_tool_intent_when_openclaw_disabled(self):
+        """Search intent + OpenClaw disabled -> provider=tool."""
+        dec = RoutingDecision(intent=INTENT_SEARCH)
+        out = apply_policy(
+            dec,
+            message="search for python tutorial",
+            openclaw_enabled=False,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_TOOL
+        assert out.tool_intent == INTENT_SEARCH
 
 
 class TestClassifyWebIntentFallback:

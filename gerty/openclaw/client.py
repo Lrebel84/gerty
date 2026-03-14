@@ -12,6 +12,7 @@ from gerty.config import (
     OPENCLAW_GATEWAY_WS_URL,
     OPENCLAW_TIMEOUT,
 )
+from gerty.openclaw.validation import validate_openclaw_response
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,22 @@ _TOOL_FEEDBACK = {
     "process": "Running...",
 }
 
-def _format_message(
+def build_openclaw_payload(
     message: str,
     history: list[dict] | None = None,
     system_context: str | None = None,
 ) -> str:
-    """Build payload: system + full history + current message."""
+    """
+    Build the OpenClaw execution payload (Sprint 2c).
+
+    Structure (in order):
+    1. [System: {system_context}] — operating context, tool instructions, persona
+    2. Previous conversation: — full history as "Role: content" lines (no trimming here)
+    3. {message} — current user message
+
+    History policy: Full history as provided. No trimming or summarization in this layer.
+    The pipeline may trim (voice) or summarize (chat, local) before passing history.
+    """
     parts = []
     context = (system_context or "").strip()
     if context:
@@ -74,20 +85,20 @@ def execute(
 ) -> str:
     """
     Execute a task via OpenClaw. Sync wrapper around async openclaw-sdk.
-    Returns result content or a natural error message if OpenClaw is unreachable.
+    Returns validated, normalized result or a natural error message if unreachable.
     """
     if not _gateway_port_reachable():
         return OPENCLAW_UNAVAILABLE_MSG
-    payload = _format_message(message, history=history, system_context=system_context)
+    payload = build_openclaw_payload(message, history=history, system_context=system_context)
     timeout = _get_execute_timeout()
     try:
-        return asyncio.run(asyncio.wait_for(_execute_async(payload), timeout=timeout))
+        return asyncio.run(asyncio.wait_for(_execute_async(payload, original_message=message), timeout=timeout))
     except asyncio.TimeoutError:
         logger.warning("OpenClaw execute timed out after %ds", timeout)
         return OPENCLAW_UNAVAILABLE_MSG
 
 
-async def _execute_async(message: str) -> str:
+async def _execute_async(payload: str, *, original_message: str = "") -> str:
     try:
         from openclaw_sdk import OpenClawClient
         from openclaw_sdk.core.config import ClientConfig, ExecutionOptions
@@ -105,13 +116,19 @@ async def _execute_async(message: str) -> str:
     try:
         async with await OpenClawClient.connect(**config.model_dump()) as client:
             agent = client.get_agent(OPENCLAW_AGENT_ID, session_name="gerty")
-            # Explicit deliver=False: SDK-only (no Discord/Telegram); avoids channel resolution.
             options = ExecutionOptions(deliver=False)
-            result = await agent.execute(message, options=options)
-            if result.success:
-                return result.content or "Done."
-            logger.warning("OpenClaw returned success=%s, content=%r", result.success, (result.content or "")[:200])
-            return result.content or "OpenClaw ran but returned no output. Run: openclaw status && openclaw gateway logs --follow"
+            result = await agent.execute(payload, options=options)
+            content = (result.content or "").strip()
+            validated = validate_openclaw_response(
+                content, original_message=original_message or payload, success=result.success
+            )
+            if validated.replaced_with_hint:
+                logger.warning(
+                    "OpenClaw: validated replacement. empty=%s tool_fail=%s fabricated=%s msg=%r",
+                    validated.is_empty, validated.is_tool_failure, validated.is_likely_fabricated,
+                    (original_message or payload)[:100],
+                )
+            return validated.normalized_content
     except Exception as e:
         logger.warning("OpenClaw execute failed: %s", e)
         return OPENCLAW_UNAVAILABLE_MSG
@@ -142,7 +159,7 @@ async def _execute_stream_async(
     try:
         async with await OpenClawClient.connect(**config.model_dump()) as client:
             agent = client.get_agent(OPENCLAW_AGENT_ID, session_name="gerty")
-            payload = _format_message(message, history=history, system_context=system_context)
+            payload = build_openclaw_payload(message, history=history, system_context=system_context)
             seen_tool_feedback = set()
 
             try:
@@ -168,10 +185,11 @@ async def _execute_stream_async(
                 logger.debug("OpenClaw streaming not supported, using execute")
                 options = ExecutionOptions(deliver=False)
                 result = await agent.execute(payload, options=options)
-                if result.success and result.content:
-                    yield result.content
-                else:
-                    yield result.content or "OpenClaw ran but returned no output."
+                content = (result.content or "").strip()
+                validated = validate_openclaw_response(
+                    content, original_message=message, success=result.success
+                )
+                yield validated.normalized_content
     except asyncio.TimeoutError:
         logger.warning("OpenClaw stream timed out after %ds", _get_execute_timeout())
         yield OPENCLAW_UNAVAILABLE_MSG

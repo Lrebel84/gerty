@@ -74,6 +74,10 @@ These bypass OpenClaw and go directly to `ToolExecutor`:
 
 **Sprint 2a:** Intent labels are constants (`INTENT_TIME`, `INTENT_CALENDAR`, etc.). `classify_to_decision(text)` returns `RoutingDecision(intent=...)`; `classify_intent(text)` returns the intent string (unchanged).
 
+**Sprint 2b:** Flow is `classify_intent` → `apply_policy` → `execute`. Policy layer (`apply_policy`) decides provider (tool, openclaw, chat, app_unavailable, complex) without executing. Execution layer (`_execute_route`, `_execute_route_stream`) consumes `RoutingDecision` and performs the action.
+
+**Sprint 2c:** OpenClaw payload via `build_openclaw_payload()`. Result validation (`validate_openclaw_response`) detects empty output, tool failure phrasing, fabricated success; replaces with context-aware hints. Fallback pattern: trusted direct (CalendarTool) → OpenClaw → degraded.
+
 ### OpenClaw-enabled behavior
 
 When `GERTY_OPENCLAW_ENABLED=1` and intent is **not** in `FAST_PATH_INTENTS`:
@@ -164,7 +168,7 @@ From `gerty/settings.py` (persisted in `data/settings.json`):
 
 ## Known Brittle Areas
 
-1. **OpenClaw payload:** System context and full history flattened into one formatted message string (`_format_message`). Instruction boundaries can blur; history trimming/summarization not explicit.
+1. **OpenClaw payload:** `build_openclaw_payload()` in `openclaw/client.py` — structure documented in OPENCLAW_INTEGRATION.md. History as provided; pipeline may trim/summarize before passing.
 
 2. ~~**Hardcoded path in `openclaw/google_auth.py`**~~ **Fixed (Sprint 1a):** Default is now `~/.openclaw/credentials/google-token.json` via `Path.home()`. Override with `GOOGLE_TOKEN_PATH` env var.
 

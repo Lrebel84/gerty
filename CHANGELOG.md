@@ -11,6 +11,31 @@ All notable changes to the Gerty project are documented in this file.
 
 ---
 
+## [Unreleased]
+
+### Build Plan – Sprints 2a, 2b, 2c (stabilize/openclaw-foundation)
+
+Phased improvements from the external review build plan. See `docs/BUILD_PLAN_SPRINTS.md` and `docs/BUILD_PLAN_PROGRESS.md`.
+
+#### Sprint 2a – Intent Classification
+- Intent constants (`INTENT_*`), `RoutingDecision` dataclass
+- Pure classifier `_classify_intent_impl(text, browse_enabled)`, `classify_to_decision()`
+- 44 classifier tests; calendar vs app-integration edge cases
+
+#### Sprint 2b – Policy & Execution Layers
+- `apply_policy()` — decides provider (tool, openclaw, chat, app_unavailable, complex)
+- `_execute_route()`, `_execute_route_stream()` — consume `RoutingDecision`
+- Flow: classify → apply_policy → execute
+- 7 policy tests; 51 router tests total
+
+#### Sprint 2c – Result Validation & OpenClaw Payload
+- `gerty/openclaw/validation.py` — empty output, tool failure phrasing, fabricated success
+- `build_openclaw_payload()` — centralized, documented
+- Fallback pattern (trusted direct → OpenClaw → degraded) documented
+- 13 OpenClaw tests; 64 total
+
+---
+
 ## [0.8.41] - 2026-03-13
 
 ### Proactive Agent – Working Setup

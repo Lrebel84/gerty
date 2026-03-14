@@ -77,14 +77,51 @@ ALL_INTENTS = (
 )
 
 
+# Provider / action labels for policy layer
+PROVIDER_TOOL = "tool"
+PROVIDER_OPENCLAW = "openclaw"
+PROVIDER_CHAT = "chat"
+PROVIDER_APP_UNAVAILABLE = "app_unavailable"
+PROVIDER_COMPLEX = "complex"
+
+
 @dataclass(frozen=True)
 class RoutingDecision:
     """
-    Result of intent classification. Policy layer (Sprint 2b) will extend.
-    For now holds intent only; routing logic uses intent directly.
+    Result of classification + policy. Execution layer consumes this.
     """
     intent: str
+    provider: str = PROVIDER_CHAT
+    tool_intent: str | None = None
+    run_web_fallback: bool = False
+    use_reasoning: bool = False
+    openclaw_fallback_calendar: bool = False
+    show_app_unavailable: bool = False
 
+
+# Tool intents: use tool executor (Gerty tools)
+TOOL_INTENTS = (
+    INTENT_TIME,
+    INTENT_DATE,
+    INTENT_ALARM,
+    INTENT_TIMER,
+    INTENT_CALCULATOR,
+    INTENT_UNITS,
+    INTENT_RANDOM,
+    INTENT_NOTES,
+    INTENT_STOPWATCH,
+    INTENT_TIMEZONE,
+    INTENT_WEATHER,
+    INTENT_RAG,
+    INTENT_SEARCH,
+    INTENT_BROWSE,
+    INTENT_POMODORO,
+    INTENT_APP_LAUNCH,
+    INTENT_MEDIA_CONTROL,
+    INTENT_SYSTEM_COMMAND,
+    INTENT_SYS_MONITOR,
+    INTENT_SCREEN_VISION,
+)
 
 # Fast path: instant Gerty tools—skip OpenClaw classifier
 # Calendar routes to OpenClaw (has gerty-calendar skill); CalendarTool used only when OpenClaw is down
@@ -202,8 +239,74 @@ def classify_intent(text: str) -> str:
 
 
 def classify_to_decision(text: str) -> RoutingDecision:
-    """Classify intent and return a RoutingDecision. Policy layer (Sprint 2b) will extend."""
+    """Classify intent and return a RoutingDecision (intent only). Use apply_policy for full decision."""
     return _classify_intent_impl(text, browse_enabled=GERTY_BROWSE_ENABLED)
+
+
+def apply_policy(
+    decision: RoutingDecision,
+    *,
+    message: str,
+    openclaw_enabled: bool,
+    tool_executor_present: bool,
+    web_fallback_enabled: bool,
+) -> RoutingDecision:
+    """
+    Policy layer: decide routing without executing.
+    Returns a new RoutingDecision with provider and policy fields set.
+    Order matches current route() logic (first match wins).
+    """
+    intent = decision.intent
+    has_app_keywords = any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
+
+    if intent in FAST_PATH_INTENTS and tool_executor_present:
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_TOOL,
+            tool_intent=intent,
+        )
+
+    if openclaw_enabled and intent not in FAST_PATH_INTENTS:
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_OPENCLAW,
+            openclaw_fallback_calendar=(intent == INTENT_CALENDAR and tool_executor_present),
+        )
+
+    if (
+        intent == INTENT_CHAT
+        and not openclaw_enabled
+        and web_fallback_enabled
+        and not has_app_keywords
+    ):
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_CHAT,
+            run_web_fallback=True,
+        )
+
+    if intent in TOOL_INTENTS and tool_executor_present:
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_TOOL,
+            tool_intent=intent,
+        )
+
+    if intent == INTENT_CHAT and not openclaw_enabled and has_app_keywords:
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_APP_UNAVAILABLE,
+            show_app_unavailable=True,
+        )
+
+    if intent == INTENT_COMPLEX:
+        return RoutingDecision(
+            intent=intent,
+            provider=PROVIDER_COMPLEX,
+            use_reasoning=True,
+        )
+
+    return RoutingDecision(intent=intent, provider=PROVIDER_CHAT)
 
 
 def _classify_intent_impl(text: str, *, browse_enabled: bool) -> RoutingDecision:
@@ -413,18 +516,37 @@ class Router:
     ) -> str:
         """
         Route message to appropriate handler.
+        Flow: classify_intent -> apply_policy -> execute.
         Returns response text.
         """
-        intent = classify_intent(message)
+        decision = classify_to_decision(message)
+        decision = apply_policy(
+            decision,
+            message=message,
+            openclaw_enabled=GERTY_OPENCLAW_ENABLED,
+            tool_executor_present=bool(self._tool_executor),
+            web_fallback_enabled=GERTY_WEB_INTENT_FALLBACK,
+        )
+        return self._execute_route(decision, message, history, custom_prompt)
 
-        # Fast path: instant Gerty tools
-        if intent in FAST_PATH_INTENTS and self._tool_executor:
-            return self._tool_executor(intent, message)
+    def _execute_route(
+        self,
+        decision: RoutingDecision,
+        message: str,
+        history: list[dict] | None,
+        custom_prompt: str | None,
+    ) -> str:
+        """
+        Execution layer: consume RoutingDecision and perform the action.
+        Single responsibility per branch.
+        """
+        intent = decision.intent
 
-        # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
-        if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
-            # Log Google Workspace requests for diagnostics (Sprint 1c)
-            _gw = intent == "calendar" or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
+        if decision.provider == PROVIDER_TOOL and decision.tool_intent and self._tool_executor:
+            return self._tool_executor(decision.tool_intent, message)
+
+        if decision.provider == PROVIDER_OPENCLAW:
+            _gw = intent == INTENT_CALENDAR or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
             if _gw:
                 logger.info("OpenClaw: Google Workspace request intent=%r msg=%r", intent, message[:80])
             from gerty.openclaw.client import execute as openclaw_execute
@@ -432,30 +554,20 @@ class Router:
             response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
             if response != OPENCLAW_UNAVAILABLE_MSG:
                 return response
-            # Fallback: OpenClaw down — use CalendarTool for calendar, else continue to Gerty chat
-            if intent == "calendar" and self._tool_executor:
-                return self._tool_executor("calendar", message)
+            if decision.openclaw_fallback_calendar and self._tool_executor:
+                return self._tool_executor(INTENT_CALENDAR, message)
 
-        # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
-        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
-            if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
-                fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
-                if fallback == "web_lookup":
-                    intent = "search"
-                elif fallback == "web_research":
-                    intent = "research"
+        if decision.provider == PROVIDER_CHAT and decision.run_web_fallback:
+            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+            if fallback == "web_lookup" and self._tool_executor:
+                return self._tool_executor(INTENT_SEARCH, message)
+            if fallback == "web_research" and self._tool_executor:
+                return self._tool_executor(INTENT_RESEARCH, message)
 
-        # Tool intents (non-fast-path): delegate to tool executor
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
-        if intent in tool_intents and self._tool_executor:
-            return self._tool_executor(intent, message)
-
-        # App integration query (calendar, gmail, drive, tasks) but OpenClaw disabled
-        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
+        if decision.provider == PROVIDER_APP_UNAVAILABLE and decision.show_app_unavailable:
             return OPENCLAW_APP_UNAVAILABLE_MSG
 
-        # Complex intent: use reasoning model or OpenRouter
-        if intent == "complex":
+        if decision.provider == PROVIDER_COMPLEX and decision.use_reasoning:
             if OPENROUTER_API_KEY and self.openrouter.is_available():
                 try:
                     return self.openrouter.chat(message, history)
@@ -492,51 +604,72 @@ class Router:
         custom_prompt: str | None = None,
         rag_model: str | None = None,
     ) -> Iterator[str]:
-        """Route message and stream response chunks. Tools return full text at once."""
-        intent = classify_intent(message)
+        """Route message and stream response chunks. Flow: classify -> apply_policy -> execute."""
+        decision = classify_to_decision(message)
+        decision = apply_policy(
+            decision,
+            message=message,
+            openclaw_enabled=GERTY_OPENCLAW_ENABLED,
+            tool_executor_present=bool(self._tool_executor),
+            web_fallback_enabled=GERTY_WEB_INTENT_FALLBACK,
+        )
+        yield from self._execute_route_stream(
+            decision, message, history, custom_prompt,
+            provider=provider,
+            local_model=local_model,
+            openrouter_model=openrouter_model,
+            rag_model=rag_model,
+        )
 
-        # Fast path: instant Gerty tools
-        if intent in FAST_PATH_INTENTS and self._tool_executor:
-            result = self._tool_executor(intent, message)
+    def _execute_route_stream(
+        self,
+        decision: RoutingDecision,
+        message: str,
+        history: list[dict] | None,
+        custom_prompt: str | None,
+        *,
+        provider: str | None = None,
+        local_model: str | None = None,
+        openrouter_model: str | None = None,
+        rag_model: str | None = None,
+    ) -> Iterator[str]:
+        """Execution layer for streaming. Consumes RoutingDecision."""
+        intent = decision.intent
+
+        if decision.provider == PROVIDER_TOOL and decision.tool_intent and self._tool_executor:
+            if decision.tool_intent == INTENT_BROWSE:
+                yield "Browsing..."
+            result = self._tool_executor(decision.tool_intent, message)
             yield result
             return
 
-        # Option A: everything else to OpenClaw when enabled; fallback to Gerty chat if unreachable
-        # Use execute() (non-streaming) — streaming was causing raw tool output to leak into replies
-        if GERTY_OPENCLAW_ENABLED and intent not in FAST_PATH_INTENTS:
-            _gw = intent == "calendar" or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
+        if decision.provider == PROVIDER_OPENCLAW:
+            _gw = intent == INTENT_CALENDAR or any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS)
             if _gw:
                 logger.info("OpenClaw: Google Workspace request intent=%r msg=%r", intent, message[:80])
             from gerty.openclaw.client import execute as openclaw_execute
             yield "Working on it..."
             openclaw_prompt = (custom_prompt or "") + OPENCLAW_TOOL_INSTRUCTIONS
-            response = openclaw_execute(
-                message, history=history, system_context=openclaw_prompt
-            )
+            response = openclaw_execute(message, history=history, system_context=openclaw_prompt)
             if response != OPENCLAW_UNAVAILABLE_MSG:
                 yield response
                 return
-            # Fallback: OpenClaw down — use CalendarTool for calendar
-            if intent == "calendar" and self._tool_executor:
-                result = self._tool_executor("calendar", message)
+            if decision.openclaw_fallback_calendar and self._tool_executor:
+                result = self._tool_executor(INTENT_CALENDAR, message)
                 yield result
                 return
 
-        # Web fallback: only when OpenClaw disabled. Adds ~5-15s; can misroute chat to research.
-        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and GERTY_WEB_INTENT_FALLBACK:
-            if not any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
-                fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
-                if fallback == "web_lookup":
-                    intent = "search"
-                elif fallback == "web_research":
-                    intent = "research"
+        if decision.provider == PROVIDER_CHAT and decision.run_web_fallback:
+            fallback = _classify_web_intent_fallback(message, self.ollama, self.openrouter)
+            if fallback == "web_lookup":
+                intent = INTENT_SEARCH
+            elif fallback == "web_research":
+                intent = INTENT_RESEARCH
 
-        if intent in ("research", "search", "browse"):
+        if intent in (INTENT_RESEARCH, INTENT_SEARCH, INTENT_BROWSE):
             logger.info("Router: intent=%r message=%r", intent, message[:80] + "..." if len(message) > 80 else message)
 
-        # Search with OpenRouter :online when provider is OpenRouter
-        # Use quick_search (fewer results, faster) for simple lookups vs full research
-        if intent == "search":
+        if intent == INTENT_SEARCH:
             use_openrouter = (provider or "local").lower() == "openrouter"
             if use_openrouter and OPENROUTER_API_KEY and self.openrouter.is_available():
                 try:
@@ -549,22 +682,18 @@ class Router:
                 except Exception as e:
                     logger.debug("OpenRouter search fallback: %s", e)
 
-        tool_intents = ("time", "date", "alarm", "timer", "calculator", "units", "random", "notes", "stopwatch", "timezone", "weather", "rag", "search", "browse", "pomodoro", "app_launch", "media_control", "system_command", "sys_monitor", "screen_vision")
-        if intent in tool_intents and self._tool_executor:
-            if intent == "browse":
+        if intent in TOOL_INTENTS and self._tool_executor:
+            if intent == INTENT_BROWSE:
                 yield "Browsing..."
             result = self._tool_executor(intent, message)
             yield result
             return
 
-        # Research intent: OpenRouter only (uses :online model for web search)
-        if intent == "research":
+        if intent == INTENT_RESEARCH:
             use_openrouter = (provider or "local").lower() == "openrouter"
             if use_openrouter and OPENROUTER_API_KEY and self.openrouter.is_available():
                 try:
-                    # Yield immediate feedback for voice/streaming (research can take 30-60s)
                     yield "Researching..."
-                    # Full response needed to parse tables; use sync research()
                     response = self.openrouter.research(message, history, system_prompt=custom_prompt)
                     from gerty.research.output import parse_and_save_tables
 
@@ -577,25 +706,23 @@ class Router:
                     logger.debug("Research fallback: %s", e)
                     yield f"Research failed: {e}. Try again or use a simpler search."
                     return
-            # Local provider: fallback message
             yield (
                 "Deep research requires OpenRouter. Switch to OpenRouter in Settings to use "
                 "web search, multi-step research, and spreadsheet output."
             )
             return
 
+        if decision.provider == PROVIDER_APP_UNAVAILABLE and decision.show_app_unavailable:
+            yield OPENCLAW_APP_UNAVAILABLE_MSG
+            return
+
         use_local = (provider or "local").lower() == "local"
         local_m = rag_model or local_model or OLLAMA_CHAT_MODEL
         openrouter_m = openrouter_model or OPENROUTER_MODEL
 
-        # App integration query (calendar, gmail, drive, tasks) but OpenClaw disabled
-        if intent == "chat" and not GERTY_OPENCLAW_ENABLED and any(kw in message.lower() for kw in APP_INTEGRATION_KEYWORDS):
-            yield OPENCLAW_APP_UNAVAILABLE_MSG
-            return
-
         if use_local and self.ollama.is_available():
             try:
-                model = rag_model or (local_m if intent != "complex" else (local_model or OLLAMA_REASONING_MODEL))
+                model = rag_model or (local_m if intent != INTENT_COMPLEX else (local_model or OLLAMA_REASONING_MODEL))
                 for chunk in self.ollama.chat_stream(
                     message, history, model=model, system_prompt=custom_prompt
                 ):

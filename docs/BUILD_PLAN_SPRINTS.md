@@ -2,6 +2,8 @@
 
 > Phased implementation of the external review build plan. Each sprint is sized for high-quality delivery. **Stabilize → Formalize → Automate → Self-improve.**
 
+**Progress:** See `docs/BUILD_PLAN_PROGRESS.md` for current status and how to pick up.
+
 ---
 
 ## Do Not Break (validate every sprint, in order)
@@ -18,24 +20,24 @@
 
 ## Sprint Overview
 
-| Sprint | Focus | Est. effort | Depends on |
-|--------|-------|-------------|------------|
-| **0** | Safety freeze & baseline | 0.5–1 day | — |
-| **1a** | Secrets & path hardening | 0.5–1 day | 0 |
-| **1b** | Config boundary & startup validation | 0.5–1 day | 1a |
-| **1c** | Google Workspace diagnostics & stabilization | 0.5–1 day | 1b |
-| **1d** | Google Workspace normalization & portability | 0.5–1 day | 1c |
-| **2a** | Intent classification (router split) | 1–2 days | 1d |
-| **2b** | Policy & execution layers | 1–2 days | 2a |
-| **2c** | Result validation & logging | 0.5–1 day | 2b |
-| **3** | OpenClaw workspace formalization | 1–2 days | 2c |
-| **4** | Observability (events, health, friction) | 1–2 days | 3 |
-| **5** | Maintenance subsystem | 1–2 days | 4 |
-| **6** | Autonomy policy | 0.5–1 day | 5 |
-| **7** | Self-improvement pipeline | 2–3 days | 6 |
-| **8** | Subagent roles | 1–2 days | 7 |
-| **9** | Heartbeat & cron | 1 day | 8 |
-| **10** | Security tightening | 1–2 days | 9 |
+| Sprint | Focus | Est. effort | Depends on | Status |
+|--------|-------|-------------|------------|--------|
+| **0** | Safety freeze & baseline | 0.5–1 day | — | ✅ |
+| **1a** | Secrets & path hardening | 0.5–1 day | 0 | ✅ |
+| **1b** | Config boundary & startup validation | 0.5–1 day | 1a | ✅ |
+| **1c** | Google Workspace diagnostics & stabilization | 0.5–1 day | 1b | ✅ |
+| **1d** | Google Workspace normalization & portability | 0.5–1 day | 1c | ✅ |
+| **2a** | Intent classification (router split) | 1–2 days | 1d | ✅ |
+| **2b** | Policy & execution layers | 1–2 days | 2a | ✅ |
+| **2c** | Result validation & OpenClaw payload | 0.5–1 day | 2b | ✅ |
+| **3** | OpenClaw workspace formalization | 1–2 days | 2c | ⏳ Next |
+| **4** | Observability (events, health, friction) | 1–2 days | 3 | — |
+| **5** | Maintenance subsystem | 1–2 days | 4 | — |
+| **6** | Autonomy policy | 0.5–1 day | 5 | — |
+| **7** | Self-improvement pipeline | 2–3 days | 6 | — |
+| **8** | Subagent roles | 1–2 days | 7 | — |
+| **9** | Heartbeat & cron | 1 day | 8 | — |
+| **10** | Security tightening | 1–2 days | 9 | — |
 
 ---
 
@@ -264,10 +266,18 @@
 
 ## Acceptance
 
-- [ ] Policy and execution are separate
-- [ ] One message traceable: classification → policy → execution
-- [ ] Route decisions logged
-- [ ] Do-not-break checklist passes
+- [x] Policy and execution are separate
+- [x] One message traceable: classification → policy → execution
+- [ ] Route decisions logged (deferred to observability sprint)
+- [x] Do-not-break checklist passes
+
+## Completed (2026-03-13)
+
+- **Policy layer:** `apply_policy(decision, message, openclaw_enabled, tool_executor_present, web_fallback_enabled) -> RoutingDecision`
+- **RoutingDecision extended:** provider, tool_intent, run_web_fallback, use_reasoning, openclaw_fallback_calendar, show_app_unavailable
+- **Execution layer:** `_execute_route()` and `_execute_route_stream()` consume decision
+- **Flow:** `route()` and `route_stream()` use classify_to_decision → apply_policy → execute
+- **Tests:** 7 policy tests added; 51 total passing
 
 ---
 
@@ -296,10 +306,17 @@
 
 ## Acceptance
 
-- [ ] OpenClaw responses validated and normalized
-- [ ] Payload construction centralized and documented
-- [ ] Fallback pattern generalized
-- [ ] Do-not-break checklist passes
+- [x] OpenClaw responses validated and normalized
+- [x] Payload construction centralized and documented
+- [x] Fallback pattern generalized
+- [x] Do-not-break checklist passes
+
+## Completed (2026-03-13)
+
+- **Validation:** `gerty/openclaw/validation.py` — `validate_openclaw_response()` detects empty, tool failure phrasing, fabricated success; returns context-aware hints
+- **Payload:** `build_openclaw_payload()` in client; structure documented in OPENCLAW_INTEGRATION.md; history policy explicit
+- **Fallback pattern:** Three tiers (trusted direct → OpenClaw → degraded) documented in OPENCLAW_INTEGRATION.md
+- **Tests:** 13 in `tests/test_openclaw.py` (validation + payload)
 
 ---
 

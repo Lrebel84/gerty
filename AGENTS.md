@@ -13,6 +13,7 @@ Before doing anything:
 2. Read `USER.md` — who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. In main sessions: also read `MEMORY.md`
+5. When working on the build plan: read `docs/BUILD_PLAN_PROGRESS.md` to pick up where you left off
 
 Don't ask permission. Just do it.
 
