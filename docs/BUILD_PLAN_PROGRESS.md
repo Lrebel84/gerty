@@ -4,7 +4,8 @@
 
 **Last updated:** 2026-03-14  
 **Branch:** `stabilize/openclaw-foundation`  
-**Status:** ✅ **Build plan complete** (Sprints 0–10a)
+**Status:** ✅ **Build plan complete** (Sprints 0–10a)  
+**Tests:** 566 passed
 
 ---
 
@@ -36,6 +37,8 @@
 | 9a | ✅ Done | `--validate`, cron install docs |
 | 10 | ✅ Done | Security tightening (trusted tools, forbidden patterns, sensitive paths) |
 | 10a | ✅ Done | OpenClaw pre-send screening (`screen_openclaw_message`) |
+| 10b | ✅ Done | OpenClaw state boundary hardening v1 |
+| 10c | ✅ Done | OpenClaw memory transparency v2 |
 
 ---
 
@@ -192,6 +195,26 @@
 - **Docs:** SECURITY_POLICY.md OpenClaw-bound screening section
 - **Tests:** screen_openclaw_message, TestOpenclawSecurityGuard
 
+### Sprint 10b (OpenClaw State Boundary Hardening v1)
+
+- **Audit:** `docs/OPENCLAW_PERSISTENCE_AUDIT.md` — persistent state locations, hidden memory risks
+- **Boundary doc:** `docs/OPENCLAW_STATE_BOUNDARY.md` — Gerty vs OpenClaw vs shared state, reset semantics
+- **Inspect:** `python -m gerty --inspect-openclaw-context` — session, memory DB, bootstrap files, proactive influence
+- **Reset:** `clear_full_reset()` — New chat (Gerty + session) vs full (also memory DB); `DELETE /api/chat/history?full=true`
+- **API:** `GET /api/chat/history/state?include_openclaw=true` — proactive influence summary
+- **Docs:** OPENCLAW_BOOTSTRAP.md — bootstrap memory influence section
+- **Tests:** TestOpenclawStateBoundary (5 tests)
+
+### Sprint 10c (OpenClaw Memory Transparency v2)
+
+- **Module:** `gerty/openclaw/transparency.py` — `compute_memory_influence_metadata`, `set_last_reply_metadata`, `get_last_reply_metadata`
+- **Reply metadata:** `memory_influence_detected`, `memory_sources_used`, `bootstrap_memory_used`, `proactive_memory_used`, etc.
+- **Transparency report:** `build_transparency_report`, `format_transparency_report`, `--inspect-openclaw-transparency`
+- **API:** `GET /api/chat/last-reply-metadata` — last OpenClaw reply metadata; `GET /api/chat/history/state?include_openclaw=true` — extended with transparency
+- **Router:** Sets metadata when OpenClaw route is used (sync + stream)
+- **Docs:** `docs/OPENCLAW_MEMORY_TRANSPARENCY.md`
+- **Tests:** TestOpenclawMemoryTransparency (7 tests)
+
 ---
 
 ## Commits (build plan work)
@@ -209,7 +232,7 @@ Sprints 3–10a implemented on `stabilize/openclaw-foundation`.
 
 ## Post–Build Plan: Systems
 
-Beyond the original build plan sprints, two systems have been implemented:
+Beyond the original build plan sprints, the following systems have been implemented:
 
 ### System 1: Personal Context Engine
 
@@ -238,6 +261,14 @@ Beyond the original build plan sprints, two systems have been implemented:
 - **Routing:** ORCHESTRATOR_KEYWORDS after agent_* so direct commands still win
 - **Docs:** [docs/INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md)
 
+### System 4.2: Capability Registry + Intent Orchestrator Hardening
+
+- **Modules:** `gerty/capability_registry.py`, `gerty/tools/capability_registry_tool.py`
+- **Config:** `config/capabilities.json` — structured map of tools, commands, action types
+- **Features:** load/list/get/find/summarize capabilities; orchestrator uses registry in choose_action_path and suggest_missing_capability; list/show capability commands
+- **Commands:** list capabilities, show capability &lt;name&gt;, what can you do for this
+- **Docs:** [docs/CAPABILITY_REGISTRY.md](CAPABILITY_REGISTRY.md)
+
 ### System 5: Project / Task Graph
 
 - **Modules:** `gerty/project_graph.py`, `gerty/tools/project_graph_tool.py`
@@ -260,6 +291,81 @@ Beyond the original build plan sprints, two systems have been implemented:
 - **Data:** `data/opportunities/<timestamp>-<slug>.json`
 - **Features:** create, list, get, summarize, score, suggest_next_step, create_project_from_opportunity
 - **Categories:** business, product, automation, niche, content, other
+
+### System 6.1: Opportunity Research Execution Layer
+
+- **Module:** `gerty/opportunity_execution.py`
+- **Data:** `data/opportunities/outputs/<opportunity_id>-<timestamp>.md`
+- **Features:** assign_agent_to_opportunity, run_opportunity_research, write_opportunity_output, update_opportunity_after_research, get_research_summary, suggest_opportunity_status
+- **Commands:** assign agent &lt;name&gt; to opportunity &lt;id&gt;, research opportunity &lt;id&gt;, opportunity research summary &lt;id&gt;, suggest opportunity status &lt;id&gt;
+- **Opportunity fields:** assigned_agent, last_researched_at, last_research_summary, research_output_artifact
+
+### Grounded Planning Mode v2
+
+- **Module:** `gerty/grounded_planning.py` — detection, relevance extraction, planning state assembly
+- **Detection:** Phrase match + keyword scoring (score ≥ 3); casual suppressors; min 12 chars
+- **Relevance extraction:** Section-aware from BUILD_PLAN_PROGRESS, IMPROVEMENT_BACKLOG, GERTY_OVERVIEW, GERTY_VISION
+- **Sources:** Quick status, Completed work, How to pick up; open backlog items only; What is Gerty, Key Components, Request Flow; Development Phases, Project Purpose
+- **Observability:** `planning_detection_reason`, `planning_sources_considered`, `planning_extracted_headings` in log_prompt_metrics and inspect-prompt
+- **Docs:** [docs/GROUNDED_PLANNING_MODE.md](GROUNDED_PLANNING_MODE.md), [docs/GROUNDED_PLANNING_V2_REPORT.md](GROUNDED_PLANNING_V2_REPORT.md)
+- **Tests:** 18 tests in `tests/test_grounded_planning.py`; inspect tests for planning diagnostics
+
+### Inspection-First Planning Mode v3.1
+
+- **Module:** `gerty/inspection_first.py` — v3.1: IB reference card, invented-metric suppression, recommendation diversity, health-check triggers, audit tone
+- **Trigger:** Explicit phrases (checked first; bypass min length); v3.1: "health check", "system health", "sanity check", "system audit", "architecture review"; cue + context; keyword scoring
+- **Precedence:** Phrase match before planning suppressors; inspection-first wins when both could apply
+- **Sources:** Grounded planning sources + MODEL_ROUTING, EXECUTION_BOUNDARY, GROUNDED_PLANNING_MODE, CAPABILITY_REGISTRY, capability registry; optional LIVE_VALIDATION_FINDINGS.md; v3.1: IB reference card prepended when backlog present
+- **Instruction:** Observed facts, inferred conclusions, avoid speculative filler; **Do NOT invent** scores/percentages/timelines; **Tone** professional, no emojis; **Vary** recommendation by prompt focus; **IB reference** IB-015≠IB-016
+- **Direct path:** Injection on both OpenClaw and direct when inspection-first (grounded planning: OpenClaw only)
+- **Docs:** [docs/INSPECTION_FIRST_MODE.md](INSPECTION_FIRST_MODE.md), [docs/INSPECTION_FIRST_V31_REPORT.md](INSPECTION_FIRST_V31_REPORT.md)
+- **Tests:** 47 tests in `tests/test_inspection_first.py`
+- **IB-047:** Addressed for health-check; some paraphrases may still miss
+
+### Model Routing v1
+
+- **Module:** `gerty/model_routing.py` — task classification, profile mapping, select_model_for_request
+- **Task types:** general_chat, grounded_planning, coding_or_build_help, research_or_analysis, summarization
+- **Profiles:** general_chat, reasoning, coding, research, summarization
+- **Config:** OPENROUTER_REASONING_MODEL, OPENROUTER_CODING_MODEL (optional overrides)
+- **Integration:** Router direct Ollama/OpenRouter paths use model routing; OpenClaw path unchanged
+- **Observability:** task_type, selected_model_profile, model_route_reason, fallback_used in log_prompt_metrics
+- **Docs:** [docs/MODEL_ROUTING.md](MODEL_ROUTING.md), [docs/MODEL_ROUTING_V1_REPORT.md](MODEL_ROUTING_V1_REPORT.md)
+- **Tests:** 15 tests in `tests/test_model_routing.py`
+- **IB-038:** No runtime fallback when preferred model fails
+
+### Execution Boundary v1
+
+- **Module:** `gerty/execution_boundary.py` — should_use_openclaw, select_execution_path
+- **Purpose:** When OpenClaw enabled, prefer native for reasoning/planning; OpenClaw for action-heavy
+- **Config:** GERTY_EXECUTION_BOUNDARY_ENABLED=1 (default); 0 for legacy
+- **Integration:** apply_policy checks boundary before routing to OpenClaw
+- **Observability:** execution_path, execution_path_reason, openclaw_used
+- **Docs:** [docs/EXECUTION_BOUNDARY.md](EXECUTION_BOUNDARY.md), [docs/EXECUTION_BOUNDARY_V1_REPORT.md](EXECUTION_BOUNDARY_V1_REPORT.md)
+- **Tests:** 11 tests in `tests/test_execution_boundary.py`
+- **IB-039:** Keyword detection may misclassify edge cases
+
+---
+
+## Hardening Sprint v1 (2026-03-14)
+
+- **Tests:** Fixed 8 failing tests for Execution Boundary v1 and bootstrap. Tests now use OpenClaw-required messages (e.g. "check my calendar") when asserting OpenClaw path; planning/inspection routes to native.
+- **HEARTBEAT.md:** Removed from root. Bootstrap cleanup complete (IB-033, IB-043). Regression fix (2026-03-14): file had reappeared; removed again. Maintenance Audit Sprint (2026-03-14): removed again; 566 tests green.
+- **Inspection-first boundary:** apply_policy now includes inspection-first in planning_triggered; inspection-style requests prefer native execution.
+- **Intent-to-capability validation:** `test_intent_capability_mapping_coverage` in test_capability_registry.py validates explicit mappings and capability_id coverage.
+- **Maintenance test:** Decoupled from exact LLM output; asserts routing (tool not called, provider=chat) with patched settings.
+- **Docs:** OPENCLAW_BOOTSTRAP.md, CAPABILITY_REGISTRY.md updated.
+- **Inspection-First v2:** Broader detection, improved factual summary, sharper recommendations (see Inspection-First section above).
+
+---
+
+## Maintenance Audit Sprint (2026-03-14)
+
+- **Scope:** Architecture consistency, OpenClaw governance, docs staleness, test coverage, safe cleanup.
+- **Cleanup:** HEARTBEAT.md removed (bootstrap regression); `_parse_markdown_sections` extracted to `gerty/utils/markdown_sections.py` (M-002/IB-045).
+- **HEARTBEAT permanent fix:** Trace audit identified OpenClaw CLI (onboard/configure/setup) as recreation source. Set `agents.defaults.skipBootstrap: true` in `~/.openclaw/openclaw.json`; Gerty owns workspace bootstrap files. See [HEARTBEAT_MD_RECREATION_TRACE.md](HEARTBEAT_MD_RECREATION_TRACE.md).
+- **Docs:** BUILD_PLAN_PROGRESS, WEAKNESS_AUDIT_REPORT, IMPROVEMENT_BACKLOG, GERTY_OVERVIEW, OPENCLAW_BOOTSTRAP, OPENCLAW_INTEGRATION, HEARTBEAT_MD_RECREATION_TRACE updated.
+- **Tests:** 566 passed. See [MAINTENANCE_AUDIT_SPRINT_REPORT.md](MAINTENANCE_AUDIT_SPRINT_REPORT.md).
 
 ---
 

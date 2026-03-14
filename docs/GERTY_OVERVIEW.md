@@ -90,19 +90,23 @@ Gerty routes your messages to built-in tools (time, alarms, search, etc.) or to 
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **main.py** | `gerty/main.py` | Entry point: builds ToolExecutor, Router, FastAPI app; starts server, Telegram bot, alarm loop; opens PyWebView window |
-| **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; Option A: OpenClaw for non-fast-path when enabled |
+| **Router** | `gerty/llm/router.py` | Intent classification (keywords), routing to tools or LLM; Execution Boundary v1: planning/reasoning → native; action-heavy → OpenClaw when enabled; see [EXECUTION_BOUNDARY.md](EXECUTION_BOUNDARY.md) |
+| **Grounded Planning** | `gerty/grounded_planning.py` | For strategic/planning requests: extracts relevant project-state sections (BUILD_PLAN, BACKLOG, OVERVIEW, VISION), injects context before OpenClaw; see [GROUNDED_PLANNING_MODE.md](GROUNDED_PLANNING_MODE.md) |
+| **Inspection-First** | `gerty/inspection_first.py` | Stricter than grounded planning: for review/audit/inspect requests, inspects extended docs + capability registry before answering; see [INSPECTION_FIRST_MODE.md](INSPECTION_FIRST_MODE.md) |
 | **Pipeline** | `gerty/pipeline.py` | Chat pipeline: prompt, history summarization, voice tweaks; calls `router.route_stream()` |
 | **ToolExecutor** | `gerty/tools/base.py` | Registers tools by intent; `execute(intent, message)` dispatches to matching tool |
-| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, MaintenanceTool, PersonalContextTool, AgentFactoryTool, AgentRunnerTool, AgentDesignerTool, IntentOrchestratorTool, ProjectGraphTool, OpportunityScannerTool, etc. |
+| **Tools** | `gerty/tools/*.py` | TimeDateTool, AlarmsTool, TimersTool, CalculatorTool, SearchTool, RagTool, ScreenVisionTool, MaintenanceTool, PersonalContextTool, AgentFactoryTool, AgentRunnerTool, AgentDesignerTool, CapabilityRegistryTool, IntentOrchestratorTool, ProjectGraphTool, OpportunityScannerTool, etc. |
 | **Voice** | `gerty/voice/` | Wake word (Picovoice/openWakeWord), STT (faster-whisper, Moonshine, Vosk, Groq), TTS (Piper, Kokoro), VAD |
 | **RAG** | `gerty/rag/` | ChromaDB, embedder (nomic-embed-text), parsers (PDF, Excel, Word); on-demand via RagTool |
 | **Personal Context** | `gerty/personal_context.py`, `gerty/tools/personal_context_tool.py` | System 1: goals, projects, routines, controlled updates; see [PERSONAL_CONTEXT_ENGINE.md](PERSONAL_CONTEXT_ENGINE.md) |
 | **Agent Factory** | `gerty/agent_factory.py`, `gerty/agent_registry.py`, `gerty/tools/agent_factory_tool.py` | System 2: create/list agents from templates; see [AGENT_FACTORY.md](AGENT_FACTORY.md) |
 | **Agent Designer** | `gerty/agent_designer.py`, `gerty/tools/agent_designer_tool.py` | System 3: design/improve agents; see [AGENT_DESIGNER.md](AGENT_DESIGNER.md) |
 | **Intent Orchestrator** | `gerty/intent_orchestrator.py`, `gerty/tools/intent_orchestrator_tool.py` | System 4: interpret high-level outcome requests, recommend or invoke best path; see [INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md) |
+| **Capability Registry** | `gerty/capability_registry.py`, `gerty/tools/capability_registry_tool.py` | System 4.2: canonical capability map with native vs OpenClaw ownership; Google Workspace → gog; list/show capabilities; see [CAPABILITY_REGISTRY.md](CAPABILITY_REGISTRY.md) |
 | **Project Graph** | `gerty/project_graph.py`, `gerty/tools/project_graph_tool.py` | System 5: create projects, add tasks, dependencies, assign agents; see [PROJECT_TASK_GRAPH.md](PROJECT_TASK_GRAPH.md) |
 | **Project Execution** | `gerty/project_execution.py` | System 5.1: run tasks via assigned agents; invoked by ProjectGraphTool |
 | **Opportunity Scanner** | `gerty/opportunity_scanner.py`, `gerty/tools/opportunity_scanner_tool.py` | System 6: discover, record, summarize business/product opportunities; see [OPPORTUNITY_SCANNER.md](OPPORTUNITY_SCANNER.md) |
+| **Opportunity Execution** | `gerty/opportunity_execution.py` | System 6.1: assign agents to opportunities, run bounded research, store outputs; invoked by OpportunityScannerTool |
 | **UI** | `gerty/ui/` | FastAPI server, PyWebView bridge; frontend in `frontend/` (React, Vite) |
 | **Security** | `gerty/security.py` | Trusted tools, forbidden patterns, sensitive paths; `screen_openclaw_message()` before OpenClaw |
 | **Heartbeat** | `gerty/heartbeat.py` | Health rotation: diagnostics, friction tail, health tail, incidents; `python -m gerty --heartbeat` |
@@ -161,8 +165,9 @@ The router uses **keyword-based** intent classification. Order matters: specific
 | agent_runner | "ask agent X: task", "run agent X: task" |
 | agent_designer | "design agent", "improve agent", "suggest agent for" |
 | intent_orchestrator | "help me explore", "best next step", "turn this into", "organize this" |
+| capability_registry | "list capabilities", "show capability X", "what can you do for this" |
 | project_graph | "create project", "add task", "project status", "assign agent to task" |
-| opportunity_scanner | "record opportunity", "scan opportunities", "summarize opportunities" |
+| opportunity_scanner | "assign agent to opportunity", "research opportunity", "opportunity research summary", "suggest opportunity status" |
 | chat / complex | Fallback; may trigger web intent fallback |
 
 **OpenClaw (when enabled):** Option A—everything except fast-path goes to OpenClaw. Gerty passes full chat history and custom prompt. When the daemon is unreachable, Gerty falls back to Ollama/OpenRouter chat. **Headless:** Use `security: "full"` + `ask: "off"` with **dcg-guard** (blocks rm -rf, destructive git, etc.), or allowlist commands. **Caveat:** OpenClaw/Grok sometimes returns invented responses instead of using tools; behaviour is inconsistent. See [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) and [docs/OPENCLAW_DIAGNOSIS.md](OPENCLAW_DIAGNOSIS.md).
@@ -190,7 +195,7 @@ Key environment variables (see `.env.example`):
 | Term | What | Where |
 |------|------|-------|
 | **Gerty heartbeat** | Built-in health rotation: diagnostics, friction logs, incidents. Writes to `data/maintenance/heartbeat/` when noteworthy. | `python -m gerty --heartbeat`; see [docs/HEARTBEAT_AND_CRON.md](HEARTBEAT_AND_CRON.md) |
-| **Proactive-agent heartbeats** | ClawHub skill: system cron runs `scripts/proactive-heartbeat.sh` every 4h — runs OpenClaw agent with HEARTBEAT.md checklist, web search, calendar/email checks. | `skills/proactive-agent/`; `notes/areas/proactive-updates.md`; see [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) §8 |
+| **Proactive-agent heartbeats** | ClawHub skill: system cron runs `scripts/proactive-heartbeat.sh` every 4h — runs OpenClaw agent with HEARTBEAT_PROACTIVE.md checklist, web search, calendar/email checks. | `skills/proactive-agent/`; `notes/areas/proactive-updates.md`; see [docs/OPENCLAW_INTEGRATION.md](OPENCLAW_INTEGRATION.md) §8 |
 
 AGENTS.md "heartbeat poll" = when the proactive-agent skill runs (via cron), it sends a message to the agent; that is the poll. Not the same as `python -m gerty --heartbeat`.
 
@@ -227,15 +232,19 @@ gerty/
 │   ├── agent_registry.py   # System 2: list/get agents
 │   ├── agent_designer.py   # System 3: design/improve agents
 │   ├── intent_orchestrator.py  # System 4: interpret outcome requests
+│   ├── capability_registry.py  # System 4.2: capability map for orchestrator
 │   ├── project_graph.py   # System 5: projects, tasks, dependencies
 │   ├── project_execution.py   # System 5.1: run tasks via assigned agents
 │   ├── opportunity_scanner.py # System 6: discover, record, summarize opportunities
+│   ├── opportunity_execution.py # System 6.1: assign agents, run research
 │   ├── openclaw/        # OpenClaw client (action execution)
 │   ├── rag/             # RAG (ChromaDB, parsers, embedder)
 │   ├── voice/           # Wake word, STT, TTS
 │   ├── research/        # Deep research
 │   ├── telegram/        # Telegram bot
 │   ├── ui/              # FastAPI server, PyWebView bridge
+│   ├── grounded_planning.py  # Planning context for strategic requests (v2: section-aware extraction)
+│   ├── inspection_first.py   # Stricter inspection for review/audit requests (v1)
 │   ├── heartbeat.py     # Health rotation (--heartbeat)
 │   ├── security.py      # Trusted tools, forbidden patterns, OpenClaw screening
 │   ├── maintenance.py   # Incidents, proposals, tasks
@@ -249,7 +258,7 @@ gerty/
 ├── data/personal_context/  # System 1: profile, goals, projects, routines
 ├── data/agents/         # System 2: created agents
 ├── data/projects/       # System 5: project/task artifacts
-├── data/opportunities/  # System 6: opportunity artifacts
+├── data/opportunities/  # System 6: opportunity artifacts; outputs/ for research (6.1)
 └── docs/                # Documentation
 ```
 
@@ -261,6 +270,9 @@ gerty/
 | **System 2: Agent Factory** | Create and list agents from templates; invoke agents | [AGENT_FACTORY.md](AGENT_FACTORY.md) |
 | **System 3: Agent Designer** | Design/improve agents with high-quality specs; draft-first | [AGENT_DESIGNER.md](AGENT_DESIGNER.md) |
 | **System 4: Intent Orchestrator** | Interpret high-level outcome requests; recommend or invoke best path | [INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md) |
+| **System 4.2: Capability Registry** | Canonical capability map (native vs OpenClaw); Google Workspace → gog; list/show capabilities | [CAPABILITY_REGISTRY.md](CAPABILITY_REGISTRY.md) |
+| **Inspection-First Mode** | For review/audit/inspect: inspects docs + capability registry before answering; reduces guessed advice | [INSPECTION_FIRST_MODE.md](INSPECTION_FIRST_MODE.md) |
 | **System 5: Project / Task Graph** | Create projects, add tasks, dependencies, assign agents | [PROJECT_TASK_GRAPH.md](PROJECT_TASK_GRAPH.md) |
 | **System 5.1: Project Execution** | Run tasks via assigned agents; invoked by ProjectGraphTool | — |
 | **System 6: Opportunity Scanner** | Discover, record, summarize business/product opportunities | [OPPORTUNITY_SCANNER.md](OPPORTUNITY_SCANNER.md) |
+| **System 6.1: Opportunity Execution** | Assign agents to opportunities, run bounded research, store outputs | [OPPORTUNITY_SCANNER.md](OPPORTUNITY_SCANNER.md) §6.1 |

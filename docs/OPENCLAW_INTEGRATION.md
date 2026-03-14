@@ -130,7 +130,7 @@ To let Gerty/OpenClaw run commands on your PC, install skills from ClawHub, cont
 
 ### 1. Workspace
 
-Set `agents.defaults.workspace` in `~/.openclaw/openclaw.json` to your Gerty project root so OpenClaw can edit files and install skills there. Also add `GERTY_WORKSPACE` to `~/.openclaw/.env` for the gerty-calendar skill:
+Set `agents.defaults.workspace` in `~/.openclaw/openclaw.json` to your Gerty project root so OpenClaw can edit files and install skills there. Also add `GERTY_WORKSPACE` to `~/.openclaw/.env` for skills that need the workspace (e.g. gog for Google Workspace):
 
 ```bash
 # ~/.openclaw/.env
@@ -140,6 +140,8 @@ GERTY_WORKSPACE=/path/to/your/gerty
 ```json
 "agents": { "defaults": { "workspace": "/path/to/your/gerty" } }
 ```
+
+**Bootstrap ownership:** Gerty owns workspace bootstrap files. Set `skipBootstrap: true` under `agents.defaults` to prevent OpenClaw from recreating HEARTBEAT.md or other defaults when running `openclaw onboard`/`configure`/`setup`. See [OPENCLAW_BOOTSTRAP.md](OPENCLAW_BOOTSTRAP.md).
 
 ### 2. Exec on gateway (host)
 
@@ -229,7 +231,7 @@ In Gerty Settings, add a prompt that tells OpenClaw it can improve Gerty:
 
 > You are Gerty's action system. You can run commands on the host, install skills from ClawHub, edit files in the workspace, and use web search. The workspace is the Gerty project. When asked to add capabilities or improve Gerty, use exec to run clawhub install, edit files, and run tests as needed.
 
-**Google (Calendar, Gmail, Drive, Sheets, Docs):** OAuth token at `~/.openclaw/credentials/google-token.json`. Set `GERTY_WORKSPACE` in `~/.openclaw/.env` to your Gerty project root. The **gerty-calendar** skill in `skills/calendar/SKILL.md` teaches OpenClaw to run `scripts/check_google_calendar.py` via exec. **Prerequisite:** `tools.exec.host` must be `"gateway"` (not sandbox)—otherwise exec cannot read your credentials. See docs/GOOGLE_WORKSPACE_STATUS.md for status (calendar: flaky; gmail/drive/sheets/docs: unverified).
+**Google (Calendar, Gmail, Drive, Sheets, Docs):** OAuth token at `~/.openclaw/credentials/google-token.json`. The **gog** skill handles Google Workspace—use gog for calendar, Gmail, Drive. Gerty has no native calendar commands. When OpenClaw is unreachable, Gerty's CalendarTool falls back to `scripts/check_google_calendar.py`. **Prerequisite:** `tools.exec.host` must be `"gateway"` (not sandbox)—otherwise exec cannot read your credentials. See docs/GOOGLE_WORKSPACE_STATUS.md for status (calendar: flaky; gmail/drive/sheets/docs: unverified).
 
 ### 7. Timeout for long tasks
 
@@ -248,7 +250,7 @@ The **proactive-agent** skill (`clawhub install proactive-agent`) makes the agen
 
 The script (`scripts/proactive-heartbeat.sh`) sets PATH for Node 22 and runs `openclaw agent --to <telegram-id>` with an explicit message. Output goes to `logs/proactive.log`; findings are appended to `notes/areas/proactive-updates.md`.
 
-**Prerequisites:** USER.md, SOUL.md, HEARTBEAT.md at project root (see `docs/OPENCLAW_WORKSPACE_PLAN.md`). Gateway running when cron fires (Gerty or `openclaw daemon start`).
+**Prerequisites:** USER.md, SOUL.md, HEARTBEAT_PROACTIVE.md at project root (see `docs/OPENCLAW_WORKSPACE_PLAN.md`). For proactive heartbeat, agent reads HEARTBEAT_PROACTIVE.md on demand. Gateway running when cron fires (Gerty or `openclaw daemon start`).
 
 **Test:** Run `./scripts/proactive-heartbeat.sh` manually. Check `tail logs/proactive.log` and `notes/areas/proactive-updates.md`.
 
@@ -331,7 +333,7 @@ openclaw daemon start
 
 **OpenClaw executes but returns wrong/invented calendar data**
 
-**Root cause:** OpenClaw had no skill telling it how to check the calendar. Without a skill, the LLM either invents events or runs the wrong command. The **gerty-calendar** skill in `skills/calendar/SKILL.md` fixes this by instructing OpenClaw to run the Gerty script via exec.
+**Root cause:** OpenClaw had no skill telling it how to check the calendar. Without a skill, the LLM either invents events or runs the wrong command. The **gog** skill handles Google Workspace—use gog for calendar requests. Gerty has no native calendar commands.
 
 **Also:** Exec must run on the gateway (not sandbox) so it can read `~/.openclaw/credentials/google-token.json`. Set `tools.exec.host` to `"gateway"`:
 
