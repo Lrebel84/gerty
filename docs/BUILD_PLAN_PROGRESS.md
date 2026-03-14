@@ -2,7 +2,7 @@
 
 > **Purpose:** Record progress through the Gerty Build Plan. **Build plan complete.** Read this for artifact summary and status.
 
-**Last updated:** 2026-03-13  
+**Last updated:** 2026-03-14  
 **Branch:** `stabilize/openclaw-foundation`  
 **Status:** ✅ **Build plan complete** (Sprints 0–10a)
 
@@ -237,6 +237,29 @@ Beyond the original build plan sprints, two systems have been implemented:
 - **Features:** Interpret high-level outcome requests (help me explore, best next step, organize this, build whatever agent we need); choose best path (direct_answer, use_tool, run_agent, design_agent, create_project_structure, recommend_new_tool, escalate_to_maintenance); optionally invoke when simple and safe
 - **Routing:** ORCHESTRATOR_KEYWORDS after agent_* so direct commands still win
 - **Docs:** [docs/INTENT_ORCHESTRATOR.md](INTENT_ORCHESTRATOR.md)
+
+### System 5: Project / Task Graph
+
+- **Modules:** `gerty/project_graph.py`, `gerty/tools/project_graph_tool.py`
+- **Data:** `data/projects/<project_slug>/` — project.json, tasks.json, README.md, notes/, outputs/
+- **Features:** Create projects, add tasks (with dependencies, assigned_agent), update task status, summarize, suggest next task; validate_project_graph
+- **Routing:** PROJECT_GRAPH_KEYWORDS before personal_context (create project, add task, etc.)
+- **Docs:** [docs/PROJECT_TASK_GRAPH.md](PROJECT_TASK_GRAPH.md)
+
+### System 5.1: Project Execution Layer
+
+- **Module:** `gerty/project_execution.py`
+- **Features:** assign_agent_to_task, run_task, run_next_task, can_run_task; write_project_output, update_task_after_run
+- **Commands:** assign agent, run task, run next task
+- **Outputs:** `outputs/<task_id>-<timestamp>.md`
+- **Task fields:** last_run_at, last_result_summary, output_artifact
+
+### System 6: Opportunity Scanner
+
+- **Modules:** `gerty/opportunity_scanner.py`, `gerty/tools/opportunity_scanner_tool.py`
+- **Data:** `data/opportunities/<timestamp>-<slug>.json`
+- **Features:** create, list, get, summarize, score, suggest_next_step, create_project_from_opportunity
+- **Categories:** business, product, automation, niche, content, other
 
 ---
 

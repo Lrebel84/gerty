@@ -15,6 +15,7 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Vision | Screen vision |
 | System | System commands, media & audio, app launching, system monitoring |
 | Maintenance | Incidents, proposals, tasks, diagnostics |
+| Projects | Project graph (create projects, add tasks, assign agents, run tasks), opportunity scanner (record and summarize opportunities) |
 
 ---
 
@@ -266,9 +267,11 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Improve agent | "improve agent market_researcher" |
 | Suggest agent | "suggest agent for: researching and validating SaaS ideas for tattoo artists" |
 | Show agent design | "show agent design market_researcher" |
+| Show agent design artifact | "show agent design artifact 20250313-123456-niche_finder" |
+| List agent designs | "list agent designs" |
 | Create from design | "create from design niche_finder" |
 
-*Draft-first: inspect design before creating. See [docs/AGENT_DESIGNER.md](docs/AGENT_DESIGNER.md).*
+*Draft-first: inspect design before creating. Designs are persisted to `data/agent_designs/`. See [docs/AGENT_DESIGNER.md](docs/AGENT_DESIGNER.md).*
 
 ## Intent Orchestrator (high-level outcome requests)
 
@@ -280,8 +283,46 @@ A quick reference for tools and skills you can use with Gerty. Just type or say 
 | Build agent | "build whatever agent we need for researching this" |
 | Propose tool | "if we do not have the right tool, propose one" |
 | Best next step | "what is the best next step for this goal" |
+| List orchestration plans | "list orchestration plans" |
+| Show orchestration plan | "show orchestration plan 20250313-123456-plan" |
 
-*Interprets natural-language outcome requests and recommends or invokes the right path (agent, tool, design, project structure). Direct commands (list agents, ask agent X: task) still work unchanged. See [docs/INTENT_ORCHESTRATOR.md](docs/INTENT_ORCHESTRATOR.md).*
+*Interprets natural-language outcome requests and recommends or invokes the right path (agent, tool, design, project structure). Plans are persisted to `data/orchestration/`. Direct commands (list agents, ask agent X: task) still work unchanged. See [docs/INTENT_ORCHESTRATOR.md](docs/INTENT_ORCHESTRATOR.md).*
+
+---
+
+## Project / Task Graph (System 5 + 5.1)
+
+| Command | Example |
+|---------|---------|
+| Create project | "create project: AI Tattoo SaaS - explore digital product opportunities for tattoo artists" |
+| List projects | "list projects" |
+| Show project | "show project ai_tattoo_saas" |
+| Add task | "add task to ai_tattoo_saas: research market" |
+| Add task with description | "add task to ai_tattoo_saas: identify top competitors - focus on scheduling and design workflows" |
+| Update task status | "update task task_001 in ai_tattoo_saas to in_progress" |
+| Assign agent to task | "assign agent market_researcher to task task_001 in ai_tattoo_saas" |
+| Run task | "run task task_001 in ai_tattoo_saas" |
+| Run next task | "run next task for ai_tattoo_saas" |
+| Project summary | "project summary ai_tattoo_saas" |
+| Next task (suggest) | "next task for ai_tattoo_saas" |
+
+*Stored in `data/projects/<project_slug>/`. Each project has project.json, tasks.json, README.md, notes/, outputs/. Task execution (System 5.1) invokes the assigned agent and saves results to outputs/. See [docs/PROJECT_TASK_GRAPH.md](docs/PROJECT_TASK_GRAPH.md).*
+
+---
+
+## Opportunity Scanner (System 6)
+
+| Command | Example |
+|---------|---------|
+| Create opportunity | "create opportunity: AI Tattoo SaaS - tools for tattoo artists including scheduling and design workflows" |
+| List opportunities | "list opportunities" |
+| Show opportunity | "show opportunity 20260314-123000-ai_tattoo_saas" |
+| Opportunity summary | "opportunity summary 20260314-123000-ai_tattoo_saas" |
+| Score opportunity | "score opportunity 20260314-123000-ai_tattoo_saas" |
+| Next step | "next step for opportunity 20260314-123000-ai_tattoo_saas" |
+| Create project from opportunity | "create project from opportunity 20260314-123000-ai_tattoo_saas" |
+
+*Stored in `data/opportunities/<timestamp>-<slug>.json`. Categories: business, product, automation, niche, content, other. See [docs/OPPORTUNITY_SCANNER.md](docs/OPPORTUNITY_SCANNER.md).*
 
 ---
 

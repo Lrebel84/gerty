@@ -43,32 +43,40 @@ These bypass OpenClaw and go directly to `ToolExecutor`:
 
 ### Intent classification order (first match wins)
 
-1. `app_launch` — "open X", "launch X", "start X", "run X"
-2. `screen_vision` — "what am i looking at", "what's on screen", "screenshot"
-3. `sys_monitor` — "cpu usage", "memory usage", "system status"
-4. `media_control` — "play", "pause", "skip", "mute"
-5. `system_command` — "lock screen", "suspend", "reboot"
-6. `timer` (before time)
-7. `timezone`
-8. `weather`
-9. `calendar`
-10. `rag`
-11. `research`
-12. `openclaw_direct` — "list my skills", "list skills"
-13. `search` — "search for", "look up", "google"
-14. `web_lookup` — "contact details", "when is", "opening hours"
-15. `pomodoro`
-16. `stopwatch`
-17. `time`
-18. `date`
-19. `calculator` (only if `extract_math()` returns non-None)
-20. `units`
-21. `random`
-22. `notes`
-23. `alarm`
-24. `complex` — "explain", "write code", "analyze", "summarize"
-25. `browse` — only if `GERTY_BROWSE_ENABLED`; "browse", "go to", "visit"
-26. `chat` — default
+1. `maintenance` — "create incident", "run diagnostics", "maintenance summary"
+2. `opportunity_scanner` — "create opportunity", "list opportunities", "opportunity summary", "create project from opportunity"
+3. `project_graph` — "create project", "add task", "run task", "project summary", "assign agent"
+4. `personal_context` — "my goals", "add goal", "update project", "my routines"
+5. `agent_designer` — "design agent", "improve agent", "suggest agent"
+6. `agent_runner` — "ask agent X", "run agent X", "use agent X"
+7. `agent_factory` — "create agent", "list agents", "show agent"
+8. `intent_orchestrator` — "help me explore", "best next step", "turn this into"
+9. `app_launch` — "open X", "launch X", "start X", "run X"
+10. `screen_vision` — "what am i looking at", "what's on screen", "screenshot"
+11. `sys_monitor` — "cpu usage", "memory usage", "system status"
+12. `media_control` — "play", "pause", "skip", "mute"
+13. `system_command` — "lock screen", "suspend", "reboot"
+14. `timer` (before time)
+15. `timezone`
+16. `weather`
+17. `calendar`
+18. `rag`
+19. `research`
+20. `openclaw_direct` — "list my skills", "list skills"
+21. `search` — "search for", "look up", "google"
+22. `web_lookup` — "contact details", "when is", "opening hours"
+23. `pomodoro`
+24. `stopwatch`
+25. `time`
+26. `date`
+27. `calculator` (only if `extract_math()` returns non-None)
+28. `units`
+29. `random`
+30. `notes`
+31. `alarm`
+32. `complex` — "explain", "write code", "analyze", "summarize"
+33. `browse` — only if `GERTY_BROWSE_ENABLED`; "browse", "go to", "visit"
+34. `chat` — default
 
 **Special:** `APP_INTEGRATION_KEYWORDS` (calendar, gmail, drive, tasks) return `chat` when matched, but `CALENDAR_KEYWORDS` are checked earlier, so calendar queries get `calendar` intent.
 
@@ -122,7 +130,7 @@ When `GERTY_OPENCLAW_ENABLED=0` and `GERTY_WEB_INTENT_FALLBACK=1` and intent is 
 
 When not routed to OpenClaw (or after OpenClaw fallback), these go to `ToolExecutor`:
 
-`time`, `date`, `alarm`, `timer`, `calculator`, `units`, `random`, `notes`, `stopwatch`, `timezone`, `weather`, `rag`, `search`, `browse`, `pomodoro`, `app_launch`, `media_control`, `system_command`, `sys_monitor`, `screen_vision`
+`time`, `date`, `alarm`, `timer`, `calculator`, `units`, `random`, `notes`, `stopwatch`, `timezone`, `weather`, `rag`, `search`, `browse`, `pomodoro`, `app_launch`, `media_control`, `system_command`, `sys_monitor`, `screen_vision`, `maintenance`, `personal_context`, `agent_factory`, `agent_runner`, `agent_designer`, `intent_orchestrator`, `project_graph`, `opportunity_scanner`
 
 ### App integration query, OpenClaw disabled
 
