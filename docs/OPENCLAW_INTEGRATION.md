@@ -1,6 +1,6 @@
 # OpenClaw Integration
 
-Gerty can route action requests to [OpenClaw](https://github.com/openclaw/openclaw), an autonomous AI that executes tasks (files, browser, calendar, email, etc.). Gerty remains your voice and interface; OpenClaw is the execution backend.
+Gerty can route action requests to [OpenClaw](https://github.com/openclaw/openclaw), which acts as a **controlled execution layer** (files, browser, calendar, email, etc.). Gerty remains your voice and interface; OpenClaw is the execution backend. See [RUNTIME_STABILIZATION_MILESTONE.md](RUNTIME_STABILIZATION_MILESTONE.md) for governance.
 
 ## How It Works (Option A)
 
@@ -54,25 +54,31 @@ Optional:
 OPENCLAW_GATEWAY_WS_URL=ws://127.0.0.1:18789/gateway
 OPENCLAW_AGENT_ID=main
 OPENCLAW_TIMEOUT=120
-OPENCLAW_MODEL=openrouter/x-ai/grok-4.1-fast
+OPENCLAW_MODEL=openai/gpt-oss-120b
 ```
 
-### 4. Configure OpenClaw model (Grok 4.1 fast)
+### 4. Configure OpenClaw model (Lockdown v1: GPT-OSS-120B only)
 
-To use Grok 4.1 fast (same as Gerty's LLM), set the model in OpenClaw's config. Edit `~/.openclaw/openclaw.json`:
+Gerty enforces single-model usage. Set the model in OpenClaw's config. Edit `~/.openclaw/openclaw.json`:
 
 ```json
 "agents": {
   "defaults": {
     "model": {
-      "primary": "openrouter/x-ai/grok-4.1-fast"
+      "primary": "openai/gpt-oss-120b"
+    },
+    "models": {
+      "openai/gpt-oss-120b": {}
+    },
+    "subagents": {
+      "maxConcurrent": 0
     },
     ...
   }
 }
 ```
 
-Or run `openclaw configure` and select the model. OpenClaw uses its own config; Gerty's `OPENCLAW_MODEL` env var is for documentation—the actual model is set in `~/.openclaw/openclaw.json`.
+Or run `openclaw configure` and select the model. OpenClaw uses its own config; Gerty's `OPENCLAW_MODEL` env var is for documentation—the actual model is set in `~/.openclaw/openclaw.json`. See [OPENCLAW_LOCKDOWN_V1_REPORT.md](OPENCLAW_LOCKDOWN_V1_REPORT.md).
 
 ### 5. Configure OpenClaw integrations
 
@@ -275,7 +281,7 @@ The script (`scripts/proactive-heartbeat.sh`) sets PATH for Node 22 and runs `op
 | `OPENCLAW_GATEWAY_WS_URL` | `ws://127.0.0.1:18789/gateway` | OpenClaw WebSocket gateway |
 | `OPENCLAW_AGENT_ID` | `main` | OpenClaw agent to use |
 | `OPENCLAW_TIMEOUT` | `120` | Execution timeout (seconds) |
-| `OPENCLAW_MODEL` | `openrouter/x-ai/grok-4.1-fast` | Documented model; set in `~/.openclaw/openclaw.json` |
+| `OPENCLAW_MODEL` | `openai/gpt-oss-120b` | Model lock; set in `~/.openclaw/openclaw.json` |
 
 ## Testing the Connection
 

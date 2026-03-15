@@ -2,10 +2,10 @@
 
 > **Purpose:** Record progress through the Gerty Build Plan. **Build plan complete.** Read this for artifact summary and status.
 
-**Last updated:** 2026-03-14  
+**Last updated:** 2026-03-15  
 **Branch:** `stabilize/openclaw-foundation`  
-**Status:** ✅ **Build plan complete** (Sprints 0–10a)  
-**Tests:** 566 passed
+**Status:** ✅ **Build plan complete** (Sprints 0–11)  
+**Tests:** 566+ passed
 
 ---
 
@@ -39,15 +39,41 @@
 | 10a | ✅ Done | OpenClaw pre-send screening (`screen_openclaw_message`) |
 | 10b | ✅ Done | OpenClaw state boundary hardening v1 |
 | 10c | ✅ Done | OpenClaw memory transparency v2 |
+| 11 | ✅ Done | OpenClaw Runtime Lockdown v1 |
+
+---
+
+## OpenClaw Lockdown v1 (Sprint 11)
+
+- **Model lock:** GPT-OSS-120B only (`openai/gpt-oss-120b`); removed openrouter/auto
+- **Skills disabled:** proactive-agent, self-improving-agent (renamed to .disabled)
+- **Cron removed:** proactive-heartbeat every 4h
+- **Subagents:** maxConcurrent = 0
+- **Governance:** `python -m gerty --governance`, `--diagnose` includes governance
+- **Report:** [docs/OPENCLAW_LOCKDOWN_V1_REPORT.md](OPENCLAW_LOCKDOWN_V1_REPORT.md)
+
+## Runtime Stabilization Milestone (2026-03-15)
+
+Post-lockdown stabilization completed:
+
+- **Post-lockdown memory reset** — Sessions, memory DB, workspace memory archived and cleared
+- **Last-mile model leak fix** — Persisted UI settings (data/settings.json) overrode model lock; LOCKED_OPENROUTER_MODEL now enforced
+- **Model ID correction** — OpenRouter uses `openai/gpt-oss-120b` (not openrouter/openai/...)
+- **Verification** — OpenRouter logs confirm GPT-OSS-120B only
+
+**Milestone doc:** [docs/RUNTIME_STABILIZATION_MILESTONE.md](RUNTIME_STABILIZATION_MILESTONE.md)
+
+**Next phase:** Response Quality Hardening — improve assistant reasoning and contextual awareness without changing runtime architecture.
 
 ---
 
 ## How to pick up
 
-1. **Read** `docs/BUILD_PLAN_SPRINTS.md` — full sprint breakdown
-2. **Read** `docs/BUILD_PLAN_PROGRESS.md` (this file) — summary and artifacts
-3. **Read** `memory/YYYY-MM-DD.md` and `MEMORY.md` — recent context
-4. **Validate:** `python -m gerty --validate` — run do-not-break checklist
+1. **Read** [docs/CURSOR_IMPLEMENTATION_PROTOCOL.md](CURSOR_IMPLEMENTATION_PROTOCOL.md) — Cursor must follow before changes
+2. **Read** `docs/BUILD_PLAN_SPRINTS.md` — full sprint breakdown
+3. **Read** `docs/BUILD_PLAN_PROGRESS.md` (this file) — summary and artifacts
+4. **Read** `memory/YYYY-MM-DD.md` and `MEMORY.md` — recent context
+5. **Validate:** `python -m gerty --validate` — run do-not-break checklist
 
 ---
 

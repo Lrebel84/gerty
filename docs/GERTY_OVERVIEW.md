@@ -2,6 +2,10 @@
 
 **Hand this document to a developer or AI to understand what Gerty is and how it works.**
 
+**Cursor:** Before implementing changes, follow [docs/CURSOR_IMPLEMENTATION_PROTOCOL.md](CURSOR_IMPLEMENTATION_PROTOCOL.md).
+
+**Runtime (2026-03-15):** OpenClaw operates as a controlled execution layer. Model lock: `openai/gpt-oss-120b` only. See [docs/RUNTIME_STABILIZATION_MILESTONE.md](RUNTIME_STABILIZATION_MILESTONE.md).
+
 ---
 
 ## What is Gerty?
