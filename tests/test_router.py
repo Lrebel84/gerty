@@ -21,6 +21,7 @@ from gerty.llm.router import (
     apply_policy,
     classify_intent,
     classify_to_decision,
+    enrich_decision_with_taxonomy,
     parse_timer_duration,
     Router,
 )
@@ -80,6 +81,19 @@ class TestClassifyIntent:
         assert classify_intent("list incidents") == "maintenance"
         assert classify_intent("run diagnostics") == "maintenance"
 
+    def test_project_graph_before_personal_context(self):
+        """Project graph (create project, add task, run task) routes to project_graph."""
+        assert classify_intent("create project: AI Tattoo SaaS - explore digital product") == "project_graph"
+        assert classify_intent("list projects") == "project_graph"
+        assert classify_intent("show project ai_tattoo_saas") == "project_graph"
+        assert classify_intent("add task to ai_tattoo_saas: research market") == "project_graph"
+        assert classify_intent("update task task_001 in ai_tattoo_saas to in_progress") == "project_graph"
+        assert classify_intent("assign agent market_researcher to task task_001 in ai_tattoo_saas") == "project_graph"
+        assert classify_intent("run task task_001 in ai_tattoo_saas") == "project_graph"
+        assert classify_intent("run next task for ai_tattoo_saas") == "project_graph"
+        assert classify_intent("project summary ai_tattoo_saas") == "project_graph"
+        assert classify_intent("next task for ai_tattoo_saas") == "project_graph"
+
     def test_personal_context(self):
         assert classify_intent("who am I") == "personal_context"
         assert classify_intent("what are my goals") == "personal_context"
@@ -110,6 +124,13 @@ class TestClassifyIntent:
         assert classify_intent("list agents") == "agent_factory"
         assert classify_intent("show agent builder") == "agent_factory"
 
+    def test_capability_registry_before_orchestrator(self):
+        """Capability registry commands route to capability_registry; checked before orchestrator."""
+        assert classify_intent("list capabilities") == "capability_registry"
+        assert classify_intent("show capability project_graph") == "capability_registry"
+        assert classify_intent("what capabilities do you already have") == "capability_registry"
+        assert classify_intent("what can you do for this: research AI ideas") == "capability_registry"
+
     def test_intent_orchestrator_after_agent_commands(self):
         """Orchestrator keywords route to intent_orchestrator; direct commands still win."""
         assert classify_intent("help me explore tattoo AI business ideas") == "intent_orchestrator"
@@ -118,10 +139,18 @@ class TestClassifyIntent:
         assert classify_intent("build whatever agent we need for researching this") == "intent_orchestrator"
         assert classify_intent("if we do not have the right tool, propose one") == "intent_orchestrator"
         assert classify_intent("what is the best next step for this goal") == "intent_orchestrator"
+        assert classify_intent("what is the best internal path for this") == "intent_orchestrator"
+        assert classify_intent("list orchestration plans") == "intent_orchestrator"
+        assert classify_intent("show orchestration plan 20250313-123456-plan") == "intent_orchestrator"
         # Direct commands still win
         assert classify_intent("list agents") == "agent_factory"
         assert classify_intent("ask agent X: task") == "agent_runner"
         assert classify_intent("design agent: x - y") == "agent_designer"
+
+    def test_agent_designer_list_show_artifact_commands(self):
+        """list agent designs and show agent design artifact route to agent_designer."""
+        assert classify_intent("list agent designs") == "agent_designer"
+        assert classify_intent("show agent design artifact 20250313-123456-niche_finder") == "agent_designer"
 
     def test_maintenance_local_vs_broader(self):
         """Sprint 5a: local commands vs broader planning."""
@@ -187,10 +216,12 @@ class TestClassifyIntent:
         assert classify_intent("check my Google Calendar for what I've got on this week") == "calendar"
 
     def test_app_integration_keywords_route_to_chat(self):
-        """Gmail, Drive, Tasks (non-calendar) match APP_INTEGRATION_KEYWORDS, return chat."""
-        assert classify_intent("check my gmail") == "chat"
-        assert classify_intent("show my emails") == "chat"  # "my emails" matches
-        assert classify_intent("what's in my Google Drive") == "chat"
+        """Phase 3.1: Gmail/Drive route to email/drive intents; Tasks (no dedicated intent) still chat."""
+        assert classify_intent("check my gmail") == "email"
+        assert classify_intent("show my emails") == "email"
+        assert classify_intent("what's in my Google Drive") == "drive"
+        # Google Tasks has no dedicated intent yet -> chat via APP_INTEGRATION_KEYWORDS
+        assert classify_intent("check my tasks") == "chat"
 
     def test_browse_disabled_falls_through(self):
         """When browse_enabled is False, browse keywords fall through to chat."""
@@ -238,12 +269,76 @@ class TestClassifyIntent:
         assert classify_intent("convert 5 miles to km") == "units"
         assert classify_intent("pick a random number") == "random"
 
+    def test_email_intent_phase_31(self):
+        """Phase 3.1: Email as first-class intent."""
+        assert classify_intent("check if Tom emailed me") == "email"
+        assert classify_intent("summarise my unread emails") == "email"
+        assert classify_intent("reply and say I can do Thursday") == "email"
+
+    def test_drive_intent_phase_31(self):
+        """Phase 3.1: Drive as first-class intent."""
+        assert classify_intent("find my latest invoice") == "drive"
+        assert classify_intent("look for the Gerty planning doc") == "drive"
+
+    def test_gerty_health_maintenance(self):
+        """Phase 3.1: Gerty health routes to maintenance."""
+        assert classify_intent("check Gerty health") == "maintenance"
+        assert classify_intent("show me Gerty health") == "maintenance"
+        assert classify_intent("run Gerty diagnostics") == "maintenance"
+
     def test_calendar_vs_gmail_ordering(self):
-        """Calendar keywords checked before app integration; gmail/drive go to chat."""
+        """Calendar keywords checked before email/drive; gmail/drive route to email/drive (Phase 3.1)."""
         # "what's on my calendar" in CALENDAR_KEYWORDS -> calendar
         assert classify_intent("what's on my calendar") == INTENT_CALENDAR
-        # "check my gmail" in APP_INTEGRATION_KEYWORDS only -> chat
-        assert classify_intent("check my gmail") == INTENT_CHAT
+        # "check my gmail" in EMAIL_KEYWORDS -> email (Phase 3.1 first-class intent)
+        assert classify_intent("check my gmail") == "email"
+
+    def test_can_you_check_what_ive_got_on_routes_to_calendar(self):
+        """Phase 3.0B regression: natural paraphrase must route to calendar read, not chat.
+        Stabilization: single-backend mode routes calendar to OpenClaw/gog."""
+        msg = "can you check what ive got on next week"
+        assert classify_intent(msg) == INTENT_CALENDAR
+        dec = classify_to_decision(msg)
+        out = apply_policy(
+            dec,
+            message=msg,
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=True,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+        assert out.execution_path == "openclaw:gog"
+
+    def test_six_calendar_read_phrasings_resolve_to_calendar(self):
+        """Stabilization Reset §2.3: exact phrase dependence is a bug. All must resolve to calendar."""
+        phrasings = [
+            "what have I got on next week",
+            "what's on next week",
+            "what am I doing next week",
+            "check my calendar for next week",
+            "can you check what ive got on next week",
+            "my schedule next week",
+        ]
+        for msg in phrasings:
+            assert classify_intent(msg) == INTENT_CALENDAR, f"Failed for: {msg!r}"
+
+
+class TestEnrichDecisionWithTaxonomy:
+    """Phase 3.1: enrich_decision_with_taxonomy adds taxonomy fields."""
+
+    def test_enrich_adds_primary_intent_and_requires_tool(self):
+        dec = RoutingDecision(intent="calendar")
+        enriched = enrich_decision_with_taxonomy(dec, "what have I got on tomorrow?")
+        assert enriched.primary_intent == "calendar_check"
+        assert enriched.requires_tool is True
+        assert enriched.capability_owner == "google_workspace_calendar"
+
+    def test_enrich_email_reply_requires_confirmation(self):
+        dec = RoutingDecision(intent="email")
+        enriched = enrich_decision_with_taxonomy(dec, "reply and say I can do Thursday")
+        assert enriched.primary_intent == "email_reply"
+        assert enriched.requires_confirmation is True
+        assert enriched.safety_level == "write_external"
 
 
 class TestApplyPolicy:
@@ -275,8 +370,8 @@ class TestApplyPolicy:
         assert out.provider == PROVIDER_OPENCLAW
         assert out.tool_intent is None
 
-    def test_openclaw_calendar_fallback_flag(self):
-        """Calendar intent with OpenClaw -> openclaw_fallback_calendar when tool present."""
+    def test_calendar_routes_to_openclaw_single_backend(self):
+        """Stabilization: calendar read -> OpenClaw/gog when single-backend (GERTY_GOOGLE_NATIVE_ENABLED=0)."""
         dec = RoutingDecision(intent="calendar")
         out = apply_policy(
             dec,
@@ -286,7 +381,84 @@ class TestApplyPolicy:
             web_fallback_enabled=False,
         )
         assert out.provider == PROVIDER_OPENCLAW
-        assert out.openclaw_fallback_calendar is True
+        assert "gog" in (out.execution_path or "")
+
+    @patch("gerty.llm.router.GERTY_GOOGLE_NATIVE_ENABLED", True)
+    def test_calendar_routes_to_native_when_explicitly_enabled(self):
+        """Calendar read -> native tool when GERTY_GOOGLE_NATIVE_ENABLED=1."""
+        dec = RoutingDecision(intent="calendar")
+        out = apply_policy(
+            dec,
+            message="what's on my calendar",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_TOOL
+
+    def test_email_routes_to_openclaw_single_backend(self):
+        """Stabilization: email read -> OpenClaw/gog when single-backend."""
+        dec = RoutingDecision(intent="email")
+        out = apply_policy(
+            dec,
+            message="check if Tom emailed me",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+
+    def test_drive_routes_to_openclaw_single_backend(self):
+        """Stabilization: drive read -> OpenClaw/gog when single-backend."""
+        dec = RoutingDecision(intent="drive")
+        out = apply_policy(
+            dec,
+            message="find my latest invoice",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+
+    def test_calendar_create_routes_to_openclaw(self):
+        """Phase 3.0A: Write intent (calendar create) -> OpenClaw/gog, never native."""
+        dec = RoutingDecision(intent="calendar")
+        out = apply_policy(
+            dec,
+            message="add a meeting for Wednesday at 3pm",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+        assert "gog" in (out.execution_path_reason or "")
+
+    def test_email_reply_routes_to_openclaw(self):
+        """Phase 3.0A: Write intent (email reply) -> OpenClaw/gog, never native."""
+        dec = RoutingDecision(intent="email")
+        out = apply_policy(
+            dec,
+            message="reply to that email and say I can do Thursday",
+            openclaw_enabled=True,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_OPENCLAW
+
+    def test_write_intent_fails_clearly_when_openclaw_disabled(self):
+        """Phase 3.0A: Write intent + OpenClaw disabled -> fail clearly, not native."""
+        dec = RoutingDecision(intent="calendar")
+        out = apply_policy(
+            dec,
+            message="add a meeting for tomorrow",
+            openclaw_enabled=False,
+            tool_executor_present=True,
+            web_fallback_enabled=False,
+        )
+        assert out.provider == PROVIDER_APP_UNAVAILABLE
+        assert out.show_app_unavailable is True
+        assert out.unavailable_msg_override is not None
+        assert "gog" in (out.unavailable_msg_override or "").lower()
 
     def test_chat_web_fallback_when_openclaw_disabled(self):
         """Chat + OpenClaw disabled + no app keywords -> run_web_fallback."""
@@ -402,35 +574,31 @@ class TestRouterOpenClawOptionA:
 
     @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
     def test_openclaw_receives_history_and_system_context(self):
-        """OpenClaw execute receives history and custom_prompt with tool instructions."""
+        """OpenClaw execute receives history and custom_prompt for search (OpenClaw path)."""
         from gerty.llm.router import OPENCLAW_TOOL_INSTRUCTIONS
 
         with patch("gerty.openclaw.client.execute") as mock_execute:
             mock_execute.return_value = "Chat response"
             router = Router(tool_executor=MagicMock())
             history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
-            result = router.route("we're testing", history=history, custom_prompt="You are Gerty.")
+            result = router.route("search for python", history=history, custom_prompt="You are Gerty.")
             assert result == "Chat response"
             mock_execute.assert_called_once_with(
-                "we're testing",
+                "search for python",
                 history=history,
                 system_context="You are Gerty." + OPENCLAW_TOOL_INSTRUCTIONS,
             )
 
     @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", True)
-    def test_fallback_to_gerty_when_openclaw_unavailable(self):
-        """When OpenClaw returns unavailable msg, fall through to Gerty chat."""
-        from gerty.openclaw.client import OPENCLAW_UNAVAILABLE_MSG
-
-        with patch("gerty.openclaw.client.execute") as mock_execute:
-            mock_execute.return_value = OPENCLAW_UNAVAILABLE_MSG
-            router = Router(tool_executor=MagicMock())
-            router.ollama = MagicMock()
-            router.ollama.is_available.return_value = True
-            router.ollama.chat.return_value = "Ollama chat response"
-            result = router.route("hello", history=[])
-            assert result == "Ollama chat response"
-            mock_execute.assert_called_once()
+    @patch("gerty.llm.router.GERTY_GOOGLE_NATIVE_ENABLED", True)
+    def test_calendar_routes_to_native_tool(self):
+        """Calendar routes to native GoogleWorkspaceTool when GERTY_GOOGLE_NATIVE_ENABLED=1."""
+        tool_executor = MagicMock(return_value="You have 2 events today.")
+        router = Router(tool_executor=tool_executor)
+        result = router.route("check my calendar", history=[])
+        assert result == "You have 2 events today."
+        tool_executor.assert_called_once()
+        assert tool_executor.call_args[0][0] == "calendar"
 
     @patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", False)
     def test_search_falls_back_to_gerty_when_openclaw_disabled(self):
@@ -471,16 +639,19 @@ class TestRouterOpenClawOptionA:
     def test_maintenance_broader_routes_to_chat(self):
         """Broader maintenance (planning, analysis) routes to chat, not tool (Sprint 5a)."""
         tool_executor = MagicMock()
+        mock_response = "I can help with maintenance planning."
         with patch("gerty.llm.router.GERTY_OPENCLAW_ENABLED", False):
-            router = Router(tool_executor=tool_executor)
-            router.ollama = MagicMock()
-            router.ollama.is_available.return_value = True
-            router.ollama.chat.return_value = "I can help with maintenance planning."
-            # "what maintenance do I need" → maintenance intent but not local command → chat
-            assert _is_local_maintenance_command("what maintenance do I need to fix") is False
-            result = router.route("what maintenance do I need to fix", history=[])
-            tool_executor.assert_not_called()
-            assert result == "I can help with maintenance planning."
+            with patch("gerty.settings.load") as mock_settings:
+                mock_settings.return_value = {"provider": "local", "local_model": "llama3.2"}
+                router = Router(tool_executor=tool_executor)
+                router.ollama = MagicMock()
+                router.ollama.is_available.return_value = True
+                router.ollama.chat.return_value = mock_response
+                # "what maintenance do I need" → maintenance intent but not local command → chat
+                assert _is_local_maintenance_command("what maintenance do I need to fix") is False
+                result = router.route("what maintenance do I need to fix", history=[])
+                tool_executor.assert_not_called()
+                assert result == mock_response
 
 
 class TestParseTimerDuration:

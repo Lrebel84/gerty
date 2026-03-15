@@ -5,7 +5,7 @@
 **Last updated:** 2026-03-15  
 **Branch:** `stabilize/openclaw-foundation`  
 **Status:** ✅ **Build plan complete** (Sprints 0–11)  
-**Tests:** 566+ passed
+**Tests:** 575 passed
 
 ---
 
@@ -63,7 +63,27 @@ Post-lockdown stabilization completed:
 
 **Milestone doc:** [docs/RUNTIME_STABILIZATION_MILESTONE.md](RUNTIME_STABILIZATION_MILESTONE.md)
 
-**Next phase:** Response Quality Hardening — improve assistant reasoning and contextual awareness without changing runtime architecture.
+**Stabilization Foundation Sprint (2026-03-15):** Startup robustness, data persistence (alarms, agent_designer), log rotation (IB-021), model fallback (IB-038), skills sync (IB-009), intent–capability mapping (M-001). **Response Quality Hardening:** Grok removal, facts vs inference, SYSTEM_INTROSPECTION_NOTE, recommendation diversity. See [WEAKNESS_AUDIT_REPORT.md](WEAKNESS_AUDIT_REPORT.md).
+
+**Google Workspace native tools (2026-03-15):** Replaced gog with native GoogleWorkspaceTool. Calendar, Gmail, Drive route to `PROVIDER_TOOL` when `GERTY_GOOGLE_NATIVE_ENABLED=True` (default). Uses `check_google_calendar.py`, `check_google_gmail.py`, `check_google_drive.py` with `google-token.json`. Count parsing ("last 3 emails"), unread filter ("unopened", "need to respond to"). **Read-only**—create/draft/reply/delete not implemented; vision gap documented in GOOGLE_WORKSPACE_STATUS.md. Router tests updated; capabilities.json updated; gog optional/legacy.
+
+**Phase 3.0A — OpenClaw Capability Audit, Recovery, and Integration (2026-03-15):** ✅ **Complete.** All five milestones delivered.
+
+- **M1 — Audit:** Empirical verification (gog calendar, gog gmail, exec gtk-launch, xdg-open, skill install). `docs/OPENCLAW_CAPABILITY_AUDIT.md` with regression inventory table (Capability | Worked before | Evidence basis | Works now | Owner | Reason if broken | Recovery path). `scripts/verify_openclaw_capabilities.sh`.
+- **M2 — Routing fix:** `gerty/llm/router.py` — resolve taxonomy for calendar/email/drive; write intents (calendar_create, email_reply, email_send) → OpenClaw/gog; read intents → native. Routing invariant: never route to a provider that cannot fulfill the operation. `config/capabilities.json`, `docs/CAPABILITY_REGISTRY.md` dual-path. Tests: `test_calendar_create_routes_to_openclaw`, `test_email_reply_routes_to_openclaw`, `test_write_intent_fails_clearly_when_openclaw_disabled`.
+- **M3 — gog first-class:** `docs/GOOGLE_WORKSPACE_STATUS.md` dual-path (read → native, write → OpenClaw/gog). Fallback message when gog unavailable. `docs/OPENCLAW_INTEGRATION.md`, `docs/GOOGLE_OAUTH_SETUP.md` updated.
+- **M3.5 — Wow-factor tasks:** `docs/OPENCLAW_WOW_FACTOR_TASKS.md` — top five: create calendar event, reply/send email, open Spotify, open Chrome to site, run Gerty diagnostics. Status and blockers documented.
+- **M4 — Boundary:** `docs/EXECUTION_BOUNDARY.md`, `docs/GERTY_SYSTEM_ARCHITECTURE.md` — OpenClaw default execution owner for dynamic capability, Google Workspace writes, web search, app launch, file editing, skill install. Gerty owns context, safety, routing, governance.
+- **M5 — OpenClaw-First Policy:** `docs/OPENCLAW_FIRST_POLICY.md` — no inferior native replacements; allowed exceptions (faster, safer, more reliable, local-first, lower-friction read-only, OpenClaw cannot fulfill). IB-050 in IMPROVEMENT_BACKLOG. CURSOR_IMPLEMENTATION_PROTOCOL checklist.
+- **Non-goal:** No capability downgrades disguised as simplification; no replacing richer OpenClaw capability with weaker native approximation unless explicitly documented and approved.
+
+**Phase 3.0B — End-to-End Capability Recovery and Proof (2026-03-15):** ✅ **gog fixed.** GOG_KEYRING_PASSWORD set; verify_gog_setup.sh passes. **Empirical E2E:** Calendar create ✓ (event id 4jc652rto5d4tcgpajhv0d77e0), Gmail send ✓ (message_id 19cf34881788ef4a), Open browser ✓ (xdg-open), Run diagnostics ✓ (maintenance tool). Spotify replaced with "Open browser to site" (xdg-open guaranteed). Skill lifecycle: phase3b-test created; full verify pending daemon. **Routing:** "gerty diagnostics" in LOCAL_MAINTENANCE_PATTERNS. **Artifacts:** docs/PHASE_3_0B_RESULTS.md (final pass/fail), scripts/verify_gog_setup.sh, scripts/verify_phase3b_skill_lifecycle.sh, skills/phase3b-test/.
+
+**Stabilization Reset Plan (2026-03-15):** Product-level reset. Desktop app = primary runtime. Intent-first routing. Single-backend (all Google Workspace via gog/OpenClaw). Verification before success. See [docs/STABILIZATION_RESET_PLAN.md](STABILIZATION_RESET_PLAN.md).
+
+**Stabilization Reset Implementation (2026-03-15):** ✅ **Implemented.** Desktop app parity: startup log, `/api/runtime-check`, launch script docs. Single-backend: `GERTY_GOOGLE_NATIVE_ENABLED=0` default; all calendar/email/drive → OpenClaw/gog. Six calendar-read phrasings regression test. Write verification: `verify_write_response()` in openclaw/validation.py; no success without event_id/message_id.
+
+**Desktop Runtime Integrity (2026-03-15):** ✅ **Fixed.** Empty-output message for OpenClaw path now uses gog/exec/daemon hints (not native OAuth). Runtime integrity report (`/api/runtime-integrity`), trace endpoint (`/api/trace-route`), Settings → Runtime section. See [docs/DESKTOP_RUNTIME_INTEGRITY.md](DESKTOP_RUNTIME_INTEGRITY.md).
 
 ---
 
@@ -392,6 +412,40 @@ Beyond the original build plan sprints, the following systems have been implemen
 - **HEARTBEAT permanent fix:** Trace audit identified OpenClaw CLI (onboard/configure/setup) as recreation source. Set `agents.defaults.skipBootstrap: true` in `~/.openclaw/openclaw.json`; Gerty owns workspace bootstrap files. See [HEARTBEAT_MD_RECREATION_TRACE.md](HEARTBEAT_MD_RECREATION_TRACE.md).
 - **Docs:** BUILD_PLAN_PROGRESS, WEAKNESS_AUDIT_REPORT, IMPROVEMENT_BACKLOG, GERTY_OVERVIEW, OPENCLAW_BOOTSTRAP, OPENCLAW_INTEGRATION, HEARTBEAT_MD_RECREATION_TRACE updated.
 - **Tests:** 566 passed. See [MAINTENANCE_AUDIT_SPRINT_REPORT.md](MAINTENANCE_AUDIT_SPRINT_REPORT.md).
+
+---
+
+## Stabilization Foundation Sprint (2026-03-15)
+
+Per Gerty Stability Foundation Plan:
+
+- **Priority 1:** HEARTBEAT.md removed; bootstrap ownership note in OPENCLAW_INTEGRATION
+- **Priority 2:** Top-level exception handler in `__main__.py`; voice failure surfaces "Voice unavailable" in UI
+- **Priority 3:** JSON persistence safety — alarms.py, agent_designer.py; capability_registry, settings already had fallbacks
+- **Priority 4:** Intent-capability mapping documented in CAPABILITY_REGISTRY.md; test extended
+- **Priority 5:** Log rotation — events/health/friction/prompt_metrics.jsonl (5MB, keep 3); gerty.log RotatingFileHandler; OBSERVABILITY.md updated
+- **Priority 6:** Model fallback — Ollama preferred→OLLAMA_CHAT_MODEL on failure; OpenRouter→Ollama on failure; log_event("model_fallback")
+- **Priority 7:** Skills sync — test_skills_sync.py; frontend skills.ts updated (Maintenance, Personal context, Agent Factory, Agent invocation, Agent Designer)
+- **Phase 2 Response Quality:** Removed Grok/outdated terminology (pipeline, config, openrouter_client, GERTY_OVERVIEW, .env.example); inspection-first: facts vs inference, recommendation diversity; SYSTEM_INTROSPECTION_NOTE for model/architecture/memory questions
+
+**Tests:** 575 passed.
+
+---
+
+## Phase 3.1 — Foundational Assistant Reliability
+
+**Next phase:** [docs/PHASE_3_1_BUILD_PLAN.md](PHASE_3_1_BUILD_PLAN.md)
+
+Phase 3.1 turns the current architecture into a dependable natural-language assistant. Work through in sprints; test and confirm each before moving on. Update the Phase 3.1 doc with completion status as we progress.
+
+| Sprint | Focus | Status |
+|--------|-------|--------|
+| 1 | Intent taxonomy, routing object, requires-tool, intent-to-capability | ✅ Done (2026-03-15) |
+| 2 | Paraphrase suite, routing trace, golden prompts | Not started |
+| 3 | Gmail, Calendar, Drive basics | ✅ Partial (2026-03-15) — Native read-only tools (list calendar, list emails, list drive). Create/draft/reply/delete not implemented. |
+| 4 | Local system control, allowlist, confirmation policy | Not started |
+| 5 | Response templates, evidence/inference, anti-speculation, simplicity | Not started |
+| 6 | Friction logging, failure taxonomy, metrics, phrasing capture | Not started |
 
 ---
 

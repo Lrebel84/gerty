@@ -31,10 +31,15 @@ OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.1"))
 
 # OpenRouter
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b")
+# Model lock (Lockdown v1): enforced OpenRouter model; overrides settings/body
+LOCKED_OPENROUTER_MODEL = "openai/gpt-oss-120b"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-# Deep research: model with :online suffix for native web search (e.g. x-ai/grok-4.1-fast:online)
-OPENROUTER_RESEARCH_MODEL = os.getenv("OPENROUTER_RESEARCH_MODEL", "x-ai/grok-4.1-fast:online")
+# Deep research: model with :online suffix for native web search (e.g. openai/gpt-oss-120b)
+OPENROUTER_RESEARCH_MODEL = os.getenv("OPENROUTER_RESEARCH_MODEL", "openai/gpt-oss-120b")
+# Model routing v1: optional overrides per profile. Empty = use general chat model.
+OPENROUTER_REASONING_MODEL = os.getenv("OPENROUTER_REASONING_MODEL", "") or None
+OPENROUTER_CODING_MODEL = os.getenv("OPENROUTER_CODING_MODEL", "") or None
 # Web plugin options for research/search (OpenRouter)
 OPENROUTER_WEB_MAX_RESULTS = int(os.getenv("OPENROUTER_WEB_MAX_RESULTS", "10"))
 OPENROUTER_SEARCH_CONTEXT = os.getenv("OPENROUTER_SEARCH_CONTEXT", "high")  # low, medium, high
@@ -121,6 +126,16 @@ KOKORO_VOICES_PATH = KOKORO_DIR / "voices-v1.0.bin"
 
 # Data directory for alarms etc.
 DATA_DIR = PROJECT_ROOT / "data"
+PERSONAL_CONTEXT_DIR = DATA_DIR / "personal_context"
+AGENTS_DIR = DATA_DIR / "agents"
+AGENT_DESIGNS_DIR = DATA_DIR / "agent_designs"
+ORCHESTRATION_DIR = DATA_DIR / "orchestration"
+PROJECTS_DIR = DATA_DIR / "projects"
+OPPORTUNITIES_DIR = DATA_DIR / "opportunities"
+
+# Agent Factory
+AGENT_TEMPLATE_DIR = PROJECT_ROOT / "templates" / "agents" / "base_agent"
+MODEL_PROFILES_PATH = PROJECT_ROOT / "config" / "model_profiles.json"
 RESEARCH_OUTPUT_DIR = Path(os.getenv("RESEARCH_OUTPUT_DIR", "")) or DATA_DIR
 ALARMS_FILE = DATA_DIR / "alarms.json"
 CHAT_HISTORY_FILE = DATA_DIR / "chat_history.json"
@@ -157,14 +172,31 @@ VOICE_TTS_PARALLEL = os.getenv("VOICE_TTS_PARALLEL", "1").lower() in ("1", "true
 
 # OpenClaw - action execution (files, browser, calendar, email, etc.)
 GERTY_OPENCLAW_ENABLED = os.getenv("GERTY_OPENCLAW_ENABLED", "0").lower() in ("1", "true", "yes")
+# Google Workspace: use native tools (calendar, email, drive scripts) for read. Default 0 during stabilization (all via gog/OpenClaw).
+GERTY_GOOGLE_NATIVE_ENABLED = os.getenv("GERTY_GOOGLE_NATIVE_ENABLED", "0").lower() in ("1", "true", "yes")
+# Execution boundary v1: when enabled, prefer native path for reasoning/planning even when OpenClaw enabled. Set 0 for legacy (all non-fast-path → OpenClaw).
+GERTY_EXECUTION_BOUNDARY_ENABLED = os.getenv("GERTY_EXECUTION_BOUNDARY_ENABLED", "1").lower() in ("1", "true", "yes")
+# Self-improvement pipeline: use subagent roles (Observer, Diagnoser, Planner, Validator). Default False = legacy baseline.
+GERTY_PIPELINE_USE_ROLES = os.getenv("GERTY_PIPELINE_USE_ROLES", "0").lower() in ("1", "true", "yes")
 # Route web search/research/browse to OpenClaw when enabled. Set 0 if OpenClaw has no web tools configured.
 GERTY_OPENCLAW_WEB_ENABLED = os.getenv("GERTY_OPENCLAW_WEB_ENABLED", "1").lower() in ("1", "true", "yes") if GERTY_OPENCLAW_ENABLED else False
 OPENCLAW_GATEWAY_WS_URL = os.getenv("OPENCLAW_GATEWAY_WS_URL", "ws://127.0.0.1:18789/gateway")
 OPENCLAW_AGENT_ID = os.getenv("OPENCLAW_AGENT_ID", "main")
 OPENCLAW_TIMEOUT = int(os.getenv("OPENCLAW_TIMEOUT", "120"))
+# OpenClaw paths (portable defaults; override via env for custom installs)
+_openclaw_home = Path(os.path.expanduser(os.getenv("OPENCLAW_HOME", "~/.openclaw")))
+OPENCLAW_HOME_PATH = _openclaw_home
+OPENCLAW_WORKSPACE_PATH = Path(os.path.expanduser(os.getenv("OPENCLAW_WORKSPACE_PATH", str(_openclaw_home))))
+OPENCLAW_LOGS_PATH = Path(os.path.expanduser(os.getenv("OPENCLAW_LOGS_PATH", str(_openclaw_home / "logs"))))
+OPENCLAW_CREDENTIALS_PATH = Path(os.path.expanduser(os.getenv("OPENCLAW_CREDENTIALS_PATH", str(_openclaw_home / "credentials"))))
+# Memory tool DB (not cleared by New chat; full reset can optionally clear)
+OPENCLAW_MEMORY_DB_PATHS = [
+    _openclaw_home / "memory" / OPENCLAW_AGENT_ID / "main.sqlite",
+    _openclaw_home / "memory" / "main.sqlite",
+]
 # Model for OpenClaw agent. Set in ~/.openclaw/openclaw.json agents.defaults.model.primary.
 # Document for users: run openclaw configure or edit openclaw.json to use this model.
-OPENCLAW_MODEL = os.getenv("OPENCLAW_MODEL", "openrouter/x-ai/grok-4.1-fast")
+OPENCLAW_MODEL = os.getenv("OPENCLAW_MODEL", "openai/gpt-oss-120b")
 
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_OLLAMA = float(os.getenv("HTTP_TIMEOUT_OLLAMA", "5"))

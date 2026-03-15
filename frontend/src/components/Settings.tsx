@@ -35,6 +35,18 @@ interface RAGStatus {
   memory_count?: number
 }
 
+interface RuntimeIntegrity {
+  project_root: string
+  config_hash: string
+  openclaw_enabled: boolean
+  google_native_enabled: boolean
+  daemon_reachable: boolean | null
+  gog_available: boolean | null
+  openclaw_env_exists: boolean
+  google_routing: string
+  stabilization_mode: boolean
+}
+
 const RAG_CHAT_MODELS = ['llama3.1:8b', 'command-r7b', 'granite3.2:8b', 'command-r:35b']
 const RAG_EMBED_MODELS = ['nomic-embed-text', 'mxbai-embed-large', 'bge-m3']
 
@@ -91,6 +103,7 @@ export function Settings({ open, onClose, onSave, provider = 'local', onProvider
   const [sampleError, setSampleError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [runtimeIntegrity, setRuntimeIntegrity] = useState<RuntimeIntegrity | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -131,6 +144,10 @@ export function Settings({ open, onClose, onSave, provider = 'local', onProvider
         .then((r) => r.json())
         .then((d) => setRagStatus(d))
         .catch(() => setRagStatus(null))
+      fetch(`${API_BASE}/runtime-integrity`)
+        .then((r) => r.json())
+        .then((d) => setRuntimeIntegrity(d))
+        .catch(() => setRuntimeIntegrity(null))
     }
   }, [open])
 
@@ -559,6 +576,22 @@ export function Settings({ open, onClose, onSave, provider = 'local', onProvider
               <p className="text-xs text-amber-500">{sampleError}</p>
             )}
           </section>
+
+          {runtimeIntegrity && (
+            <section className="space-y-3 mb-6 p-4 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border)]">
+              <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+                Runtime
+              </h3>
+              <div className="text-xs space-y-1.5 font-mono">
+                <div>Config: {runtimeIntegrity.config_hash}</div>
+                <div>Google routing: <span className={runtimeIntegrity.google_routing === 'openclaw:gog' ? 'text-emerald-500' : 'text-amber-500'}>{runtimeIntegrity.google_routing}</span></div>
+                <div>OpenClaw: {runtimeIntegrity.openclaw_enabled ? 'on' : 'off'}</div>
+                <div>Daemon: {runtimeIntegrity.daemon_reachable === true ? '✓ reachable' : runtimeIntegrity.daemon_reachable === false ? '✗ unreachable' : '—'}</div>
+                <div>gog: {runtimeIntegrity.gog_available === true ? '✓ available' : runtimeIntegrity.gog_available === false ? '✗ not found' : '—'}</div>
+                <div>~/.openclaw/.env: {runtimeIntegrity.openclaw_env_exists ? 'exists' : 'missing'}</div>
+              </div>
+            </section>
+          )}
 
           <section className="space-y-4 mb-6">
             <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">

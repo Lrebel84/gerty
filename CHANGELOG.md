@@ -13,6 +13,50 @@ All notable changes to the Gerty project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-03-15 – Google Workspace Native Tools (gog replaced)
+
+#### Added
+- **GoogleWorkspaceTool** — Native tool for Calendar, Gmail, Drive using `google-token.json` (no gog). Routes calendar/email/drive to `PROVIDER_TOOL` when `GERTY_GOOGLE_NATIVE_ENABLED=True` (default).
+- **Count parsing** — "last 3 emails", "show 5 files" → passes count (1–50) to scripts.
+- **Unread filter** — "unopened emails", "need to respond to" → Gmail uses `is:unread`.
+- **Tests** — `tests/test_google_workspace_tool.py` for parsing; router tests updated for native routing.
+
+#### Limitations (vision gap)
+- **Read-only** — List calendar, list emails, list drive only. Create draft, reply, send, move, edit, delete not implemented. Vision: full Jarvis-style; reality: three hardcoded read scripts. See `docs/GOOGLE_WORKSPACE_STATUS.md`.
+
+#### Changed
+- **gog** — Optional/legacy. Set `GERTY_GOOGLE_NATIVE_ENABLED=False` to use gog via OpenClaw.
+- **Docs** — GOOGLE_WORKSPACE_STATUS, GOOGLE_OAUTH_SETUP, README, OPENCLAW_INTEGRATION, capability_registry, config/capabilities.json updated.
+
+### 2026-03-15 – Phase 3.0A: OpenClaw Capability Audit, Recovery, and Integration
+
+#### Added
+- **Dual-path routing** — Read intents (check calendar, list emails) → native GoogleWorkspaceTool; write intents (create event, reply/send email) → OpenClaw/gog. Routing invariant: never route a write request to a read-only provider.
+- **Empirical audit** — `docs/OPENCLAW_CAPABILITY_AUDIT.md` with regression inventory (Evidence basis column). `scripts/verify_openclaw_capabilities.sh`.
+- **Wow-factor task list** — `docs/OPENCLAW_WOW_FACTOR_TASKS.md` (top five: create calendar event, reply/send email, open Spotify, open Chrome, run diagnostics).
+- **OpenClaw-First Policy** — `docs/OPENCLAW_FIRST_POLICY.md`, IB-050. No inferior native replacements; allowed exceptions documented.
+
+#### Changed
+- **Router** — `gerty/llm/router.py` resolves taxonomy for calendar/email/drive; write intents route to OpenClaw when gog available; fail clearly with `GOOGLE_WRITE_UNAVAILABLE_MSG` when gog unavailable.
+- **Capability registry** — Dual-path entries for calendar, Gmail, Drive. `get_google_workspace_ownership_note()` updated.
+- **Boundary docs** — EXECUTION_BOUNDARY, GERTY_SYSTEM_ARCHITECTURE: OpenClaw default execution owner for writes, web search, app launch, file editing.
+
+#### Non-goal
+- No capability downgrades disguised as simplification; no replacing richer OpenClaw capability with weaker native approximation unless explicitly documented and approved.
+
+### 2026-03-15 – Desktop Runtime Integrity
+
+#### Fixed
+- **Empty-output message** — When OpenClaw returns empty for calendar/email/drive, hint now references gog/exec/daemon (not native `google_oauth_flow.py`). Path was OpenClaw; remediation was wrong.
+
+#### Added
+- **Runtime integrity report** — `GET /api/runtime-integrity`: config_hash, daemon_reachable, gog_available, openclaw_env_exists, google_routing.
+- **Trace endpoint** — `POST /api/trace-route` with `{"message": "..."}` returns intent, provider, execution_path.
+- **Settings → Runtime** — Visible status: config hash, Google routing, daemon, gog, ~/.openclaw/.env.
+- **docs/DESKTOP_RUNTIME_INTEGRITY.md** — Root cause, fix, verification steps.
+
+---
+
 ### System 4: Intent Orchestrator
 
 - **Intent Orchestrator** — Interpret high-level outcome requests ("help me explore", "best next step", "organize this", "build whatever agent we need") and choose the best internal path

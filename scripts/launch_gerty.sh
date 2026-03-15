@@ -1,6 +1,8 @@
 #!/bin/bash
 # Launch Gerty, starting OpenClaw daemon in background if enabled.
 # Used by the desktop launcher.
+# Env: Python loads .env from project root via load_dotenv in config.py.
+# Restart: Close and reopen the app to load code changes.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

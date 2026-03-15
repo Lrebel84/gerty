@@ -52,13 +52,24 @@ class ValidationResult:
     replaced_with_hint: bool
 
 
-def _empty_output_message(original_message: str) -> str:
-    """User-facing message when OpenClaw returns empty. Context-aware hints."""
+def _empty_output_message(original_message: str, *, from_openclaw: bool = True) -> str:
+    """User-facing message when OpenClaw returns empty. Context-aware hints.
+    from_openclaw=True: path was OpenClaw/gog (use gog/exec hints). False: legacy native path."""
     lower = (original_message or "").lower()
     if any(kw in lower for kw in _GOOGLE_WORKSPACE_KEYWORDS):
+        if from_openclaw:
+            return (
+                "OpenClaw returned no output for your calendar/email/drive request. "
+                "Check: (1) openclaw daemon running: openclaw daemon start, "
+                "(2) gog skill installed: clawhub install gog, "
+                "(3) ~/.openclaw/exec-approvals.json has your Python path, ask=off, "
+                "(4) tools.exec.host is 'gateway' in openclaw.json for gog keyring. "
+                "Run ./scripts/verify_gog_setup.sh to diagnose."
+            )
         return (
             "I tried to fetch your Google data but got no output. "
-            "Run `./scripts/check_google_workspace.sh` to verify OAuth, exec config, and scripts. "
+            "If token missing: run `./.venv/bin/python scripts/google_oauth_flow.py` (opens browser). "
+            "Otherwise run `./scripts/check_google_workspace.sh` to verify OAuth, exec config, and scripts. "
             "See docs/GOOGLE_WORKSPACE_STATUS.md for the full checklist."
         )
     return (
@@ -73,6 +84,8 @@ def validate_openclaw_response(
     content: str,
     original_message: str,
     success: bool,
+    *,
+    from_openclaw: bool = True,
 ) -> ValidationResult:
     """
     Validate and normalize an OpenClaw response.
@@ -91,7 +104,7 @@ def validate_openclaw_response(
     # 1. Empty output
     if is_empty:
         return ValidationResult(
-            normalized_content=_empty_output_message(original_message),
+            normalized_content=_empty_output_message(original_message, from_openclaw=from_openclaw),
             is_empty=True,
             is_tool_failure=False,
             is_likely_fabricated=False,
@@ -105,7 +118,7 @@ def validate_openclaw_response(
             break
 
     if is_tool_failure:
-        hint = _empty_output_message(original_message)
+        hint = _empty_output_message(original_message, from_openclaw=from_openclaw)
         return ValidationResult(
             normalized_content=hint,
             is_empty=False,
@@ -124,7 +137,7 @@ def validate_openclaw_response(
             if re.search(pat, lower):
                 if any(kw in msg_lower for kw in _GOOGLE_WORKSPACE_KEYWORDS):
                     is_likely_fabricated = True
-                    hint = _empty_output_message(original_message)
+                    hint = _empty_output_message(original_message, from_openclaw=from_openclaw)
                     return ValidationResult(
                         normalized_content=hint,
                         is_empty=False,
@@ -141,3 +154,55 @@ def validate_openclaw_response(
         is_likely_fabricated=False,
         replaced_with_hint=False,
     )
+
+
+# Write verification (Stabilization Reset §4): require backend confirmation before success
+_WRITE_INTENTS_REQUIRING_VERIFICATION = (
+    "calendar_create",
+    "calendar_update",
+    "email_send",
+    "email_reply",
+)
+# gog returns: event id (e.g. 4jc652rto5d4tcgpajhv0d77e0), message_id (e.g. 19cf34881788ef4a)
+_EVENT_ID_PATTERN = re.compile(
+    r"(?:event[_\s]?id|eventId|event\s+id)\s*[=:]?\s*[a-z0-9]{15,}|"
+    r"calendar\.google\.com|"
+    r"(?:created|added).*[a-z0-9]{15,}",
+    re.IGNORECASE | re.DOTALL,
+)
+_MESSAGE_ID_PATTERN = re.compile(
+    r"(?:message[_\s]?id|message_id)\s*[=:]?\s*[a-z0-9]{15,}",
+    re.IGNORECASE,
+)
+
+WRITE_VERIFICATION_FAILED_MSG = (
+    "I wasn't able to complete that. The action didn't return a confirmation. "
+    "Check your calendar or email to verify."
+)
+
+
+def verify_write_response(
+    response: str,
+    primary_intent: str | None,
+) -> str:
+    """
+    For write intents, require response to contain backend confirmation (event id, message_id).
+    Do not report success without verification.
+    """
+    if not primary_intent or primary_intent not in _WRITE_INTENTS_REQUIRING_VERIFICATION:
+        return response
+    text = (response or "").strip()
+    if not text:
+        return WRITE_VERIFICATION_FAILED_MSG
+    lower = text.lower()
+    if any(phrase in lower for phrase in ("exec failed", "error", "could not", "permission denied")):
+        return WRITE_VERIFICATION_FAILED_MSG
+    if primary_intent in ("calendar_create", "calendar_update"):
+        if _EVENT_ID_PATTERN.search(text):
+            return response
+        return WRITE_VERIFICATION_FAILED_MSG
+    if primary_intent in ("email_send", "email_reply"):
+        if _MESSAGE_ID_PATTERN.search(text):
+            return response
+        return WRITE_VERIFICATION_FAILED_MSG
+    return response

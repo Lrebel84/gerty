@@ -1,6 +1,7 @@
 """Gerty main entry point: starts UI, optional voice loop, optional Telegram bot."""
 
 import logging
+import logging.handlers
 import sys
 import threading
 from pathlib import Path
@@ -15,9 +16,12 @@ from gerty.config import LOG_LEVEL, PROJECT_ROOT
 _level = getattr(logging, LOG_LEVEL, logging.WARNING)
 _fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 logging.basicConfig(level=_level, format=_fmt, datefmt="%H:%M:%S")
-# When INFO or DEBUG, also write to gerty.log for tail -f during testing
+# When INFO or DEBUG, also write to gerty.log for tail -f during testing (5MB rotation, keep 3)
 if _level <= logging.INFO:
-    _fh = logging.FileHandler(PROJECT_ROOT / "gerty.log", mode="a", encoding="utf-8")
+    _gerty_log = PROJECT_ROOT / "gerty.log"
+    _fh = logging.handlers.RotatingFileHandler(
+        _gerty_log, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
     _fh.setFormatter(logging.Formatter(_fmt, datefmt="%H:%M:%S"))
     logging.getLogger().addHandler(_fh)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # Reduce noise
@@ -26,6 +30,8 @@ logger = logging.getLogger(__name__)
 from gerty.config import (
     ALARM_POLL_INTERVAL,
     GERTY_BROWSE_ENABLED,
+    GERTY_GOOGLE_NATIVE_ENABLED,
+    GERTY_OPENCLAW_ENABLED,
     OLLAMA_BASE_URL,
     SERVER_HOST,
     TELEGRAM_BOT_TOKEN,
@@ -38,12 +44,15 @@ from gerty.tools import (
     AgentDesignerTool,
     AgentFactoryTool,
     AgentRunnerTool,
+    CapabilityRegistryTool,
+    GoogleWorkspaceTool,
     IntentOrchestratorTool,
+    OpportunityScannerTool,
+    ProjectGraphTool,
     AlarmsTool,
     AppLaunchTool,
     BrowseTool,
     CalculatorTool,
-    CalendarTool,
     MediaControlTool,
     MaintenanceTool,
     NotesTool,
@@ -140,13 +149,16 @@ def main():
     executor.register(StopwatchTool())
     executor.register(TimezoneTool())
     executor.register(WeatherTool())
-    executor.register(CalendarTool(), ["calendar"])
     executor.register(MaintenanceTool(), ["maintenance"])
     executor.register(PersonalContextTool(), ["personal_context"])
     executor.register(AgentFactoryTool(), ["agent_factory"])
     executor.register(AgentRunnerTool(), ["agent_runner"])
     executor.register(AgentDesignerTool(), ["agent_designer"])
+    executor.register(CapabilityRegistryTool(), ["capability_registry"])
     executor.register(IntentOrchestratorTool(tool_executor=executor.execute), ["intent_orchestrator"])
+    executor.register(ProjectGraphTool(), ["project_graph"])
+    executor.register(GoogleWorkspaceTool(), ["calendar", "email", "drive"])
+    executor.register(OpportunityScannerTool(), ["opportunity_scanner"])
     executor.register(RagTool(ollama=ollama))
     executor.register(SearchTool())
     if GERTY_BROWSE_ENABLED:
@@ -163,6 +175,9 @@ def main():
     # Startup diagnostics
     from gerty.diagnostics import run_diagnostics
     run_diagnostics()
+
+    # Startup log: verify which code is running (restart app after code changes)
+    logger.info("Gerty started: project_root=%s openclaw=%s google_native=%s", PROJECT_ROOT, GERTY_OPENCLAW_ENABLED, GERTY_GOOGLE_NATIVE_ENABLED)
 
     # Build FastAPI app
     app = create_app(router)
@@ -299,6 +314,10 @@ def main():
         )
     except Exception as e:
         logger.warning("Voice loop failed to start: %s", e)
+        try:
+            on_voice_status("Voice unavailable")
+        except Exception:
+            pass
 
     icon_path = str(PROJECT_ROOT / "assets" / "gerty.png")
 

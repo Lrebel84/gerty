@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from gerty.config import (
     CHAT_HISTORY_FILE,
+    GERTY_GOOGLE_NATIVE_ENABLED,
     GERTY_OPENCLAW_ENABLED,
     HTTP_TIMEOUT_OLLAMA,
     HTTP_TIMEOUT_OPENROUTER,
@@ -23,6 +24,7 @@ from gerty.config import (
     PROJECT_ROOT,
     RAG_DIR,
 )
+from gerty.runtime_integrity import get_runtime_integrity_report
 from gerty.voice.tts import KOKORO_VOICES, TextToSpeech
 from gerty.pipeline import DEFAULT_SYSTEM_PROMPT, chat_pipeline_stream
 from gerty.rag import (
@@ -159,6 +161,45 @@ def create_app(router):
         """Return skills and tools with example commands. Update gerty/tools/skills_registry.py when adding tools."""
         return {"skills": get_skills()}
 
+    @app.get("/api/runtime-check")
+    async def runtime_check():
+        """Parity check: confirm desktop app and terminal see same config. Primary validation is via the app."""
+        return get_runtime_integrity_report()
+
+    @app.get("/api/runtime-integrity")
+    async def runtime_integrity():
+        """Full runtime integrity report: config, daemon, gog, env. Use to verify desktop app path."""
+        return get_runtime_integrity_report()
+
+    @app.post("/api/trace-route")
+    async def trace_route(body: dict = Body(default_factory=dict)):
+        """Trace routing for a message. Returns intent, provider, execution_path, tool_executor_present."""
+        message = body.get("message", "")
+        if not message:
+            return {"error": "message required"}
+        from gerty.llm.router import classify_intent, classify_to_decision, apply_policy
+        intent = classify_intent(message)
+        dec = classify_to_decision(message)
+        policy = apply_policy(
+            dec,
+            message=message,
+            openclaw_enabled=GERTY_OPENCLAW_ENABLED,
+            tool_executor_present=router._tool_executor is not None,
+            web_fallback_enabled=True,
+        )
+        return {
+            "message": message[:200],
+            "classified_intent": intent,
+            "primary_intent": getattr(dec, "primary_intent", None),
+            "provider": policy.provider,
+            "tool_intent": policy.tool_intent,
+            "execution_path": getattr(policy, "execution_path", None),
+            "execution_path_reason": getattr(policy, "execution_path_reason", None),
+            "tool_executor_present": router._tool_executor is not None,
+            "google_native_enabled": GERTY_GOOGLE_NATIVE_ENABLED,
+            "openclaw_enabled": GERTY_OPENCLAW_ENABLED,
+        }
+
     def _pcm_to_wav(pcm: bytes, sample_rate: int) -> bytes:
         """Wrap 16-bit mono PCM in WAV header."""
         import struct
@@ -268,17 +309,89 @@ def create_app(router):
             return {"messages": []}
 
     @app.delete("/api/chat/history")
-    async def delete_chat_history():
-        """Clear persisted chat history (new chat). Also clears OpenClaw session when enabled."""
+    async def delete_chat_history(full: bool = Query(False, description="Also clear OpenClaw memory DB (full reset)")):
+        """
+        New chat: Clear Gerty chat history + OpenClaw session transcript.
+        full=True: Also clear OpenClaw memory DB (destructive; use only when user requests full reset).
+        Does NOT clear: MEMORY.md, memory/*.md (bootstrap files in workspace).
+        """
         try:
+            if GERTY_OPENCLAW_ENABLED:
+                from gerty.openclaw.client import clear_full_reset
+                report = clear_full_reset(
+                    include_gerty_history=True,
+                    include_openclaw_session=True,
+                    include_openclaw_memory_db=full,
+                )
+                return {
+                    "cleared": True,
+                    "reset_report": report,
+                    "reset_type": "full" if full else "new_chat",
+                }
             if CHAT_HISTORY_FILE.exists():
                 CHAT_HISTORY_FILE.unlink()
-            if GERTY_OPENCLAW_ENABLED:
-                from gerty.openclaw.client import clear_session
-                clear_session()
-            return {"cleared": True}
+            return {"cleared": True, "reset_type": "new_chat"}
         except OSError:
             return {"cleared": False}
+
+    @app.get("/api/chat/history/state")
+    async def get_chat_history_state(
+        include_openclaw: bool = Query(False, description="Include OpenClaw context summary"),
+    ):
+        """Return backend history state for fresh-session verification.
+        Use after DELETE /api/chat/history to confirm backend is empty.
+        include_openclaw=True: Add proactive-influence and boundary notes."""
+        backend_exists = CHAT_HISTORY_FILE.exists()
+        backend_message_count = 0
+        if backend_exists:
+            try:
+                with open(CHAT_HISTORY_FILE) as f:
+                    data = json.load(f)
+                backend_message_count = len(data.get("messages", []))
+            except (json.JSONDecodeError, OSError):
+                pass
+        out = {
+            "backend_file_exists": backend_exists,
+            "backend_message_count": backend_message_count,
+            "fresh_session": not backend_exists or backend_message_count == 0,
+        }
+        if include_openclaw and GERTY_OPENCLAW_ENABLED:
+            try:
+                from gerty.openclaw.context_inspect import inspect_openclaw_context, build_transparency_report
+                ctx = inspect_openclaw_context()
+                transparency = build_transparency_report(ctx, history_included=backend_message_count > 0)
+                out["openclaw_context"] = {
+                    "proactive_recently_modified": ctx["proactive_influence"]["recently_modified_files"],
+                    "memory_db_exists": ctx["memory_db"]["exists"],
+                    "notes": ctx["notes"],
+                    "transparency": {
+                        "memory_influence_detected": transparency["likely_reply_influence"]["memory_influence_detected"],
+                        "memory_sources_used": transparency["likely_reply_influence"]["memory_sources_used"],
+                        "bootstrap_memory_used": transparency["likely_reply_influence"]["bootstrap_memory_used"],
+                        "proactive_memory_used": transparency["likely_reply_influence"]["proactive_memory_used"],
+                        "recent_memory_file_updates": transparency["recent_memory_file_updates"],
+                        "state_present": [p["source"] for p in transparency["persistent_memory_sources"]],
+                        "unknowns": transparency["unknowns_and_limitations"],
+                    },
+                }
+            except Exception:
+                pass
+        return out
+
+    @app.get("/api/chat/last-reply-metadata")
+    async def get_last_reply_metadata():
+        """
+        Return memory influence metadata for the last OpenClaw reply.
+        Developer/diagnostics only. Returns null if no OpenClaw reply since startup.
+        """
+        if not GERTY_OPENCLAW_ENABLED:
+            return {"metadata": None, "note": "OpenClaw disabled"}
+        try:
+            from gerty.openclaw.transparency import get_last_reply_metadata
+            meta = get_last_reply_metadata()
+            return {"metadata": meta, "note": "From last OpenClaw-routed reply" if meta else "No OpenClaw reply yet"}
+        except Exception:
+            return {"metadata": None, "note": "Error retrieving metadata"}
 
     @app.put("/api/chat/history")
     async def put_chat_history(body: dict = Body(default_factory=dict), skip_extract: bool = False):
@@ -370,6 +483,7 @@ def create_app(router):
                         local_model=local_model,
                         openrouter_model=openrouter_model,
                         custom_prompt=custom_prompt,
+                        metrics_source="api/chat/stream",
                     ):
                         loop.call_soon_threadsafe(queue.put_nowait, chunk)
                 except Exception as e:
@@ -500,19 +614,19 @@ def create_app(router):
     async def post_note(body: dict = Body(default_factory=dict)):
         text = body.get("text", "").strip()
         if not text:
-            return {"added": False}
-        add_note(text)
-        return {"added": True}
+            return {"added": False, "error": None}
+        ok, err = add_note(text)
+        return {"added": ok, "error": err or None}
 
     @app.delete("/api/notes/{index:int}")
     async def delete_note_at(index: int):
-        ok = delete_note(index)
-        return {"deleted": 1 if ok else 0}
+        ok, err = delete_note(index)
+        return {"deleted": 1 if ok else 0, "error": err or None}
 
     @app.delete("/api/notes")
     async def delete_all_notes():
-        count = clear_notes()
-        return {"cleared": count}
+        count, err = clear_notes()
+        return {"cleared": count, "error": err or None}
 
     @app.post("/api/timers/cancel")
     async def cancel_timers(body: dict = Body(default_factory=dict)):
