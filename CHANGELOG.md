@@ -13,6 +13,24 @@ All notable changes to the Gerty project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-03-16 – State of the System + Pass 4 Regression Fix + Impact Guard
+
+#### Added
+- **docs/IMPACT_GUARD.md** — Mandatory impact assessment before large/risky changes. Cursor must surface risks and wait for user confirmation. Copy to `.cursor/rules/impact-guard.mdc` for enforcement.
+- **docs/STATE_OF_THE_SYSTEM.md** — Full-picture summary for new sessions: where we are, what was fixed, what remains fragile, what to do next. Read first at session start.
+- **memory/2026-03-16.md** — Today's context; pointer to STATE_OF_THE_SYSTEM.
+- **Session-context rule** — `docs/STATE_OF_THE_SYSTEM.md` and `docs/PASS_4_REGRESSION_FIX.md` added to session-start checklist.
+
+#### Fixed (Pass 4 Regression)
+- **Wrong-layer security screening** — Command patterns only for direct command requests ("run ", "execute ", "exec "). "send email subject test pass 4" no longer blocked.
+- **Timezone/date-context bug** — `get_date_context()` uses GERTY_TIMEZONE when tz=None (not UTC). "Tomorrow" resolves correctly.
+- **Launch/open execution path** — Known sites (youtube, spotify, etc.) open in browser via native xdg-open before desktop lookup.
+
+#### Changed
+- **CURSOR_IMPLEMENTATION_PROTOCOL** — §0 Impact Assessment; §7 checklist; references docs/IMPACT_GUARD.md.
+- **GERTY_SYSTEM_ARCHITECTURE** §8–9 — Stabilization Pass 4 + regression fix; known weaknesses updated.
+- **BUILD_PLAN_PROGRESS** — Pass 4 regression fix completion; STATE_OF_THE_SYSTEM pointer.
+
 ### 2026-03-15 – Google Workspace Native Tools (gog replaced)
 
 #### Added
